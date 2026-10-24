@@ -85,6 +85,20 @@ export class World {
     }
   }
 
+  /** Append every rect intersecting [x0, x1] to `out` exactly once (reusable array → no garbage). */
+  collect(x0: number, x1: number, out: Rect[]): void {
+    out.length = 0;
+    const first = Math.floor(x0);
+    const c1 = Math.floor(x1);
+    for (let c = first; c <= c1; c++) {
+      const list = this.cols[c & this.mask]!;
+      for (let i = 0; i < list.length; i++) {
+        const r = list[i]!;
+        if (Math.floor(r.x0) === c || c === first) out.push(r);
+      }
+    }
+  }
+
   /** Lay flat ground from the cursor to cursor + length. */
   appendFlat(length: number): void {
     this.add(this.cursor, -50, this.cursor + length, 0, SOLID);

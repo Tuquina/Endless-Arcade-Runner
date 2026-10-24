@@ -7,6 +7,8 @@ import { COIN } from '../world/Rect';
 import { World } from '../world/World';
 import { Loop } from './Loop';
 import { Renderer } from '../render/Renderer';
+import { Particles } from '../render/Particles';
+import { PlayerView } from '../render/PlayerView';
 
 export type GameState = 'menu' | 'playing' | 'paused' | 'countdown' | 'dead';
 
@@ -42,24 +44,39 @@ export class Game {
   /** One-shot flag the renderer consumes to fire the record celebration. */
   celebrate = false;
   readonly debug: boolean;
+  /** Visual-only state: effects, character animation, shake/flash intensity, animation clock. */
+  readonly fx = new Particles();
+  readonly view = new PlayerView();
+  /** Debug (`?theme=N`): start the background palette N worlds in, without changing gameplay. */
+  readonly themeOffset: number;
+  shake = 0;
+  flash = 0;
+  time = 0;
   /** Seconds left in the resume countdown. */
   countdown = 0;
   /** UI hooks: called when the state changes, and once per rendered frame. */
   onState: (() => void) | null = null;
   onFrame: (() => void) | null = null;
 
+  private readonly reducedMotion: boolean = false;
+  private trailTick = 0;
   private readonly generator = new Generator(this.world);
   private readonly input: Input;
   private readonly renderer: Renderer;
   private readonly loop: Loop;
   private readonly poll = { pressed: false, held: false };
-  private deadTime = 0;
+  deadTime = 0;
   private fps = 60;
   private seedCounter: number;
 
   constructor(canvas: HTMLCanvasElement) {
     const params = new URLSearchParams(location.search);
     this.debug = params.has('debug');
+    this.themeOffset = (Number(params.get('theme')) || 0) * 400;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      this.reducedMotion = true;
+      this.fx.density = 0.4;
+    }
     this.seedCounter = Number(params.get('seed')) || (Date.now() & 0xffff);
     this.input = new Input(canvas);
     this.renderer = new Renderer(canvas);
@@ -106,6 +123,9 @@ export class Game {
     this.distance = this.coins = this.score = 0;
     this.deadTime = 0;
     this.newRecord = false;
+    this.fx.clear();
+    this.view.reset();
+    this.shake = this.flash = 0;
   }
 
   private setState(next: GameState): void {
@@ -157,14 +177,24 @@ export class Game {
     this.input.poll(this.poll);
     const { pressed, held } = this.poll;
 
-    if (this.state === 'menu') {
-      if (pressed) this.play();
+    if (this.state === 'paused' || this.state === 'countdown') {
+      // Visuals freeze with the game; only the countdown advances.
+      if (this.state === 'countdown') {
+        this.countdown -= dt;
+        if (this.countdown <= 0) this.setState('playing');
+      }
       return;
     }
-    if (this.state === 'paused') return;
-    if (this.state === 'countdown') {
-      this.countdown -= dt;
-      if (this.countdown <= 0) this.setState('playing');
+
+    // Purely cosmetic state keeps animating in the menu and on the death screen.
+    this.time += dt;
+    this.shake *= Math.exp(-dt * 7);
+    this.flash = Math.max(0, this.flash - dt * 4);
+    this.fx.update(dt);
+    this.view.update(dt, this.player.grounded, this.player.vy);
+
+    if (this.state === 'menu') {
+      if (pressed) this.play();
       return;
     }
     if (this.state === 'dead') {
@@ -177,6 +207,7 @@ export class Game {
     this.difficulty = difficultyAt(p.x);
     p.speed = speedAt(this.difficulty);
     p.step(dt, pressed, held, this.world);
+    this.playEffects(p);
     this.collectCoins();
     this.distance = Math.max(0, Math.floor(p.x));
     this.score = this.distance + this.coins * COIN_VALUE;
@@ -186,6 +217,19 @@ export class Game {
     if (p.dead) this.die();
   }
 
+  /** Turn this step's physics events into particles and character animation. */
+  private playEffects(p: Player): void {
+    if (p.jumped) {
+      this.fx.jump(p.x, p.y);
+      this.view.jump();
+    }
+    if (p.landed) {
+      this.fx.land(p.x, p.y, p.landSpeed);
+      this.view.land(p.landSpeed);
+    }
+    if (!p.grounded && ++this.trailTick % 5 === 0) this.fx.trail(p.x - 0.2, p.y + 0.4);
+  }
+
   private collectCoins(): void {
     const p = this.player;
     for (let guard = 0; guard < 4; guard++) {
@@ -193,6 +237,7 @@ export class Game {
       if (!c) return;
       c.taken = true;
       this.coins++;
+      this.fx.coin((c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2);
     }
   }
 
@@ -206,6 +251,10 @@ export class Game {
   private die(): void {
     this.deadTime = 0;
     this.commitRun();
+    // Burst at the body's last position (clamped so a fall into a pit is still visible).
+    this.fx.death(this.player.x, Math.max(this.player.y, -1));
+    if (!this.reducedMotion) this.shake = 1;
+    this.flash = 0.6;
     this.setState('dead');
   }
 
