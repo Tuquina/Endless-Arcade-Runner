@@ -1,6 +1,7 @@
 import { PLAYER_HEIGHT, SPIKE_HIT_INSET } from '../physics/constants';
 import type { Game } from '../core/Game';
-import { SOLID, type Rect } from '../world/Rect';
+import { COIN, HAZARD, SOLID, type Rect } from '../world/Rect';
+import { Confetti } from './Confetti';
 
 /** The visible world is always at least this tall and this wide (tiles) → same fairness everywhere. */
 const MIN_VIEW_H = 10;
@@ -22,6 +23,9 @@ export class Renderer {
   private scale = 1;
   private viewW = MIN_VIEW_W;
   private camX = 0;
+  private readonly confetti = new Confetti();
+  /** Seconds left on the "new record" banner. */
+  private bannerT = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d', { alpha: false })!;
@@ -39,7 +43,7 @@ export class Renderer {
     this.viewW = this.w / this.scale;
   }
 
-  render(game: Game, alpha: number, fps: number): void {
+  render(game: Game, alpha: number, frameDt: number, fps: number): void {
     const { ctx, scale } = this;
     const p = game.player;
     const px = p.prevX + (p.x - p.prevX) * alpha;
@@ -65,7 +69,7 @@ export class Renderer {
     });
     ctx.fillStyle = '#ff4d6d';
     game.world.forEachInRange(this.camX - 1, this.camX + this.viewW + 1, (r: Rect) => {
-      if (r.kind !== SOLID) {
+      if (r.kind === HAZARD) {
         const cx = (r.x0 + r.x1) / 2;
         const half = 0.5;
         ctx.beginPath();
@@ -77,6 +81,31 @@ export class Renderer {
       }
     });
 
+    // Coins.
+    ctx.fillStyle = '#ffd23f';
+    game.world.forEachInRange(this.camX - 1, this.camX + this.viewW + 1, (r: Rect) => {
+      if (r.kind === COIN && !r.taken) {
+        ctx.beginPath();
+        ctx.arc(sx((r.x0 + r.x1) / 2), sy((r.y0 + r.y1) / 2), ((r.x1 - r.x0) / 2) * scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+
+    // Marker for the personal best distance (a thin vertical line with a flag).
+    const bd = game.save.data.bestDist;
+    if (bd > 0 && game.state !== 'ready') {
+      const bx = sx(bd);
+      if (bx > -scale && bx < this.w + scale) {
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.fillRect(bx - 1, 0, 2, groundPx);
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.font = `700 ${Math.round(scale * 0.4)}px system-ui, sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText('BEST', bx + 6, groundPx * 0.25);
+      }
+    }
+
     // Player.
     if (!p.dead) {
       ctx.fillStyle = '#ffd23f';
@@ -87,21 +116,58 @@ export class Renderer {
     }
 
     if (game.debug) this.drawDebug(game, sx, sy, fps);
+    if (game.celebrate) {
+      game.celebrate = false;
+      this.bannerT = 2;
+      this.confetti.burst(this.w / 2, this.h * 0.3, scale * 9);
+    }
+    this.confetti.update(frameDt, scale * 14);
+    this.confetti.draw(ctx, scale * 0.2);
+    this.bannerT = Math.max(0, this.bannerT - frameDt);
     this.drawHud(game);
   }
 
   private drawHud(game: Game): void {
-    const { ctx } = this;
+    const { ctx, scale } = this;
+    const pad = scale * 0.5;
+    const font = (mult: number): string => `700 ${Math.round(scale * mult)}px system-ui, sans-serif`;
     ctx.fillStyle = '#ffffff';
     ctx.textBaseline = 'top';
-    const fs = Math.round(this.scale * 0.7);
-    ctx.font = `700 ${fs}px system-ui, sans-serif`;
     ctx.textAlign = 'left';
-    ctx.fillText(`${game.score} m`, this.scale * 0.5, this.scale * 0.5);
-    if (game.state !== 'playing') {
-      ctx.textAlign = 'center';
-      ctx.font = `700 ${Math.round(this.scale * 0.9)}px system-ui, sans-serif`;
-      ctx.fillText(game.state === 'ready' ? 'TAP TO START' : 'TAP TO RETRY', this.w / 2, this.h * 0.28);
+    ctx.font = font(0.8);
+    ctx.fillText(String(game.score), pad, pad);
+    ctx.font = font(0.4);
+    ctx.globalAlpha = 0.75;
+    ctx.fillText(`BEST ${Math.max(game.best, game.score)}`, pad, pad + scale * 0.95);
+    ctx.globalAlpha = 1;
+
+    ctx.textAlign = 'right';
+    ctx.font = font(0.4);
+    ctx.fillStyle = '#ffd23f';
+    ctx.fillText(`● ${game.coins}`, this.w - pad, pad);
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = 0.75;
+    ctx.fillText(`LV ${game.level}  ·  TRY ${game.attempts}`, this.w - pad, pad + scale * 0.6);
+    ctx.globalAlpha = 1;
+
+    ctx.textAlign = 'center';
+    if (game.state === 'ready') {
+      ctx.font = font(0.9);
+      ctx.fillText('TAP TO START', this.w / 2, this.h * 0.28);
+    } else if (game.state === 'dead') {
+      ctx.font = font(1.1);
+      ctx.fillText(`${game.score}`, this.w / 2, this.h * 0.2);
+      ctx.font = font(0.5);
+      ctx.fillText(game.newRecord ? 'NEW RECORD!' : `BEST ${game.best}`, this.w / 2, this.h * 0.2 + scale * 1.3);
+      ctx.fillText('TAP TO RETRY', this.w / 2, this.h * 0.2 + scale * 2.1);
+    }
+    if (this.bannerT > 0 && game.state === 'playing') {
+      const t = Math.min(1, this.bannerT / 0.4, (2 - this.bannerT) / 0.2 + 0.01);
+      ctx.globalAlpha = Math.min(1, t);
+      ctx.fillStyle = '#ffd23f';
+      ctx.font = font(0.9 + 0.2 * Math.min(1, (2 - this.bannerT) * 4));
+      ctx.fillText('NEW RECORD!', this.w / 2, this.h * 0.12);
+      ctx.globalAlpha = 1;
     }
   }
 

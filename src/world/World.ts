@@ -1,5 +1,5 @@
 import { Pool } from '../core/Pool';
-import { HAZARD, Rect, SOLID, type RectKind } from './Rect';
+import { COIN, HAZARD, Rect, SOLID, type RectKind } from './Rect';
 
 /** Where the world starts (behind the player's spawn at x = 0). */
 export const WORLD_START = -12;
@@ -36,6 +36,7 @@ export class World {
     r.x1 = x1;
     r.y1 = y1;
     r.kind = kind;
+    r.taken = false;
     const c0 = Math.floor(x0);
     const c1 = Math.floor(x1);
     r.lastCol = c1;
@@ -65,7 +66,7 @@ export class World {
       const list = this.cols[c & this.mask]!;
       for (let i = 0; i < list.length; i++) {
         const r = list[i]!;
-        if (r.kind === kind && r.x0 < x1 && r.x1 > x0 && r.y0 < y1 && r.y1 > y0) return r;
+        if (r.kind === kind && !r.taken && r.x0 < x1 && r.x1 > x0 && r.y0 < y1 && r.y1 > y0) return r;
       }
     }
     return null;
@@ -91,4 +92,4 @@ export class World {
   }
 }
 
-export { HAZARD, SOLID };
+export { COIN, HAZARD, SOLID };

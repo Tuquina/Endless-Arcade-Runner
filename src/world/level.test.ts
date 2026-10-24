@@ -5,6 +5,7 @@ import { Generator } from './Generator';
 import { SegmentBuilder } from './SegmentBuilder';
 import { PREFABS } from './segments';
 import { solve } from './Solver';
+import { COIN, HAZARD, SOLID } from './Rect';
 import { World } from './World';
 
 const D_SAMPLES = [0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1];
@@ -82,5 +83,31 @@ describe('generated runs are completable end to end', () => {
     let nonGroundSolid = 0;
     world.forEachInRange(0, 149, (r) => { if (r.kind === 0 && r.y0 >= 0) nonGroundSolid++; });
     expect(nonGroundSolid).toBe(0);
+  });
+});
+
+describe('coins', () => {
+  it('appear, and never overlap solids or hazards', () => {
+    const world = new World(4096);
+    const gen = new Generator(world);
+    gen.reset(3);
+    gen.ensureAhead(1500);
+    let coins = 0;
+    world.forEachInRange(0, 1500, (r) => {
+      if (r.kind !== COIN) return;
+      coins++;
+      expect(world.overlap(r.x0, r.y0, r.x1, r.y1, SOLID)).toBeNull();
+      expect(world.overlap(r.x0, r.y0, r.x1, r.y1, HAZARD)).toBeNull();
+      expect(r.y1).toBeLessThan(2.3); // reachable with a normal jump
+    });
+    expect(coins).toBeGreaterThan(50);
+  });
+
+  it('collected coins are skipped by queries', () => {
+    const world = new World(64);
+    const c = world.add(1, 1, 1.6, 1.6, COIN);
+    expect(world.overlap(0, 0, 3, 3, COIN)).toBe(c);
+    c.taken = true;
+    expect(world.overlap(0, 0, 3, 3, COIN)).toBeNull();
   });
 });

@@ -3,7 +3,12 @@ import { MECHANICS, UNLOCK_DISTANCE, difficultyAt, reactionTime, speedAt, type M
 import { SegmentBuilder } from './SegmentBuilder';
 import { PREFABS } from './segments';
 import type { Prefab } from './segments/types';
+import { COIN, SOLID, HAZARD } from './Rect';
 import type { World } from './World';
+
+/** Chance that a segment gets a coin arc, and the coin pickup radius (tiles). */
+const COIN_CHANCE = 0.6;
+const COIN_R = 0.3;
 
 /** Flat, obstacle-free runway after spawn. */
 export const START_RUNWAY = 18;
@@ -45,10 +50,31 @@ export class Generator {
     const prefab = this.choose(dist, d);
     // First appearance of a mechanic uses the prefab's mildest parameters.
     const buildD = this.introducedNow ? prefab.minD : d;
+    const segStart = this.world.cursor;
     this.builder.begin(this.world);
     prefab.build(this.builder, this.rng, Math.max(prefab.minD, Math.min(prefab.maxD, buildD)));
     this.builder.commit();
     this.last = prefab;
+    if (this.rng.next() < COIN_CHANCE) this.placeCoins(segStart, this.world.cursor);
+  }
+
+  /**
+   * Optional coin arc over a segment, following the natural jump path (low at the ends, peak
+   * ≈ a tap jump). Coins never touch geometry and never affect solvability.
+   */
+  private placeCoins(start: number, end: number): void {
+    const n = Math.max(3, Math.min(8, Math.round(end - start) + 2));
+    const x0 = start - 1;
+    const span = end - start + 2;
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      const x = x0 + span * t;
+      const y = 0.9 + 0.9 * Math.sin(Math.PI * t);
+      const w = this.world;
+      if (w.overlap(x - COIN_R, y - COIN_R, x + COIN_R, y + COIN_R, SOLID)) continue;
+      if (w.overlap(x - COIN_R, y - COIN_R, x + COIN_R, y + COIN_R, HAZARD)) continue;
+      w.add(x - COIN_R, y - COIN_R, x + COIN_R, y + COIN_R, COIN);
+    }
   }
 
   private introducedNow = false;
