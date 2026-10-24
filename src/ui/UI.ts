@@ -1,7 +1,8 @@
 import type { Game } from '../core/Game';
+import { SKINS, type Skin } from '../core/skins';
 import './ui.css';
 
-type ScreenName = 'menu' | 'pause' | 'dead' | 'settings';
+type ScreenName = 'menu' | 'pause' | 'dead' | 'settings' | 'skins';
 
 /** Delay before the game-over screen appears, so the death itself is visible first. */
 const DEAD_SCREEN_DELAY_MS = 450;
@@ -24,7 +25,11 @@ export class UI {
     pause: el('screen-pause'),
     dead: el('screen-dead'),
     settings: el('screen-settings'),
+    skins: el('screen-skins'),
   };
+  private readonly toast = el('toast');
+  private toastTimer = 0;
+  private skinsOpen = false;
   private readonly countdownEl = el('countdown');
   private readonly hudScore = el('hud-score');
   private readonly hudBest = el('hud-best');
@@ -47,6 +52,8 @@ export class UI {
     window.addEventListener('keydown', this.onKey);
     game.onState = () => this.sync();
     game.onFrame = () => this.updateHud();
+    game.onUnlock = (skin) => this.showToast(skin);
+    this.buildSkins();
     this.refreshToggles();
     this.sync();
   }
@@ -64,7 +71,10 @@ export class UI {
         this.applyScreen();
       }, DEAD_SCREEN_DELAY_MS);
     }
-    if (g.state === 'menu') el('menu-best').textContent = String(g.best);
+    if (g.state === 'menu') {
+      el('menu-best').textContent = String(g.best);
+      this.refreshGoal();
+    }
     this.hud.dataset.show = String(g.state !== 'menu' && g.state !== 'dead');
     this.applyScreen();
   }
@@ -83,12 +93,12 @@ export class UI {
   }
 
   private applyScreen(): void {
-    const active: ScreenName | null = this.settingsOpen ? 'settings' : this.baseScreen();
+    const active: ScreenName | null = this.settingsOpen ? 'settings' : this.skinsOpen ? 'skins' : this.baseScreen();
     for (const name of Object.keys(this.screens) as ScreenName[]) {
       this.screens[name].dataset.show = String(name === active);
     }
     this.hud.dataset.show = String(
-      !this.settingsOpen && this.game.state !== 'menu' && this.game.state !== 'dead',
+      !this.settingsOpen && !this.skinsOpen && this.game.state !== 'menu' && this.game.state !== 'dead',
     );
   }
 
@@ -98,6 +108,72 @@ export class UI {
     el('dead-best').textContent = String(g.best);
     el('dead-coins').textContent = String(g.coins);
     el('dead-record').hidden = !g.newRecord;
+
+    const badge = el('dead-unlock');
+    badge.hidden = g.unlockedNow.length === 0;
+    badge.textContent = `¡Aspecto desbloqueado: ${g.unlockedNow.map((s) => s.name).join(', ')}!`;
+    const next = g.nextReward;
+    el('dead-next').textContent = next
+      ? `Próximo aspecto: ${next.name} · ${next.goal} m (tu mejor: ${g.maxDist} m)`
+      : '';
+  }
+
+  /** Menu progress bar towards the next skin. */
+  private refreshGoal(): void {
+    const g = this.game;
+    const next = g.nextReward;
+    if (!next) {
+      el('goal-label').textContent = '¡Todos los aspectos desbloqueados!';
+      el('goal-num').textContent = '';
+      el('goal-fill').style.width = '100%';
+      return;
+    }
+    el('goal-label').textContent = `Próximo: ${next.name}`;
+    el('goal-num').textContent = `${Math.min(g.maxDist, next.goal)} / ${next.goal} m`;
+    el('goal-fill').style.width = `${Math.min(100, (g.maxDist / next.goal) * 100)}%`;
+  }
+
+  private showToast(skin: Skin): void {
+    this.toast.textContent = `¡${skin.goal} m! Aspecto desbloqueado: ${skin.name}`;
+    this.toast.classList.add('show');
+    window.clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => this.toast.classList.remove('show'), 3200);
+  }
+
+  /** Cards are created once; `refreshSkins` only flips their state. */
+  private buildSkins(): void {
+    const grid = el('skin-grid');
+    for (const s of SKINS) {
+      const card = document.createElement('button');
+      card.className = 'skin-card';
+      card.dataset.action = 'select-skin';
+      card.dataset.skin = s.id;
+      const cube = document.createElement('div');
+      cube.className = `skin-cube${s.accessory ? ` acc-${s.accessory}` : ''}${s.rainbow ? ' rainbow' : ''}`;
+      cube.style.setProperty('--c', s.color);
+      cube.style.setProperty('--s', s.shade);
+      cube.append(document.createElement('i'), document.createElement('i'));
+      const name = document.createElement('span');
+      name.className = 'skin-name';
+      name.textContent = s.name;
+      const note = document.createElement('span');
+      note.className = 'skin-note';
+      card.append(cube, name, note);
+      grid.append(card);
+    }
+    this.refreshSkins();
+  }
+
+  private refreshSkins(): void {
+    const g = this.game;
+    for (const card of el('skin-grid').children as HTMLCollectionOf<HTMLElement>) {
+      const skin = SKINS.find((s) => s.id === card.dataset.skin)!;
+      const unlocked = g.isUnlocked(skin.id);
+      card.dataset.locked = String(!unlocked);
+      card.setAttribute('aria-pressed', String(unlocked && g.skin.id === skin.id));
+      card.setAttribute('aria-label', unlocked ? skin.name : `${skin.name}, bloqueado: llegá a ${skin.goal} m`);
+      card.lastElementChild!.textContent = unlocked ? (g.skin.id === skin.id ? 'Elegido' : '') : `🔒 ${skin.goal} m`;
+    }
   }
 
   /** Called every rendered frame: cheap, only writes changed values. */
@@ -177,9 +253,19 @@ export class UI {
         this.settingsOpen = true;
         this.applyScreen();
         break;
+      case 'skins':
+        this.skinsOpen = true;
+        this.refreshSkins();
+        this.applyScreen();
+        break;
       case 'back':
         this.settingsOpen = false;
+        this.skinsOpen = false;
         this.applyScreen();
+        break;
+      case 'select-skin':
+        g.selectSkin(target.dataset.skin ?? '');
+        this.refreshSkins();
         break;
       case 'toggle-music':
         g.save.data.music = !g.save.data.music;
@@ -200,8 +286,9 @@ export class UI {
 
   private onKey = (e: KeyboardEvent): void => {
     if (e.code !== 'Escape' && e.code !== 'KeyP') return;
-    if (this.settingsOpen) {
+    if (this.settingsOpen || this.skinsOpen) {
       this.settingsOpen = false;
+      this.skinsOpen = false;
       this.applyScreen();
     } else {
       this.game.togglePause();

@@ -423,3 +423,219 @@
     transition-duration: 0.001s !important;
   }
 }
+
+/* ---------- challenges & skins ---------- */
+.goal {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.goal-text {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.goal-text b {
+  color: var(--gold);
+}
+.goal-bar {
+  height: 0.55rem;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+.goal-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--green), var(--gold));
+  transition: width 0.5s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.btn-row {
+  display: flex;
+  gap: calc(var(--u) * 0.6);
+  width: 100%;
+}
+.btn-row .btn {
+  font-size: 1rem;
+  padding-inline: 0.6rem;
+}
+.panel-wide {
+  width: min(100%, 30rem);
+}
+.skins-sub {
+  margin: -0.4rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+  font-weight: 600;
+}
+.skin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: calc(var(--u) * 0.6);
+  width: 100%;
+}
+.skin-card {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.8rem 0.3rem 0.7rem;
+  min-height: 7rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12);
+  touch-action: manipulation;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+}
+.skin-card:active {
+  transform: scale(0.96);
+}
+.skin-card[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 3px var(--green), 0 0 1.2rem rgba(46, 230, 166, 0.35);
+  background: rgba(46, 230, 166, 0.14);
+}
+.skin-card[data-locked='true'] {
+  opacity: 0.7;
+}
+.skin-card[data-locked='true'] .skin-cube {
+  filter: grayscale(1) brightness(0.55);
+  animation: none;
+}
+.skin-card:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+.skin-name {
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+}
+.skin-note {
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.skin-cube {
+  position: relative;
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 0.7rem;
+  background: var(--c);
+  box-shadow: 0 0.25rem 0 var(--s);
+}
+.skin-cube i {
+  position: absolute;
+  top: 0.85rem;
+  width: 0.42rem;
+  height: 0.62rem;
+  border-radius: 0.25rem;
+  background: #2b1d5c;
+}
+.skin-cube i:first-child {
+  left: 0.7rem;
+}
+.skin-cube i:last-child {
+  right: 0.7rem;
+}
+.skin-cube.acc-shades::after {
+  content: '';
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  top: 0.65rem;
+  height: 0.9rem;
+  border-radius: 0.3rem;
+  background: #14102b;
+}
+.skin-cube.acc-shades i {
+  z-index: 1;
+  background: #fff;
+  opacity: 0.55;
+  height: 0.18rem;
+  top: 0.8rem;
+}
+.skin-cube.acc-crown::before {
+  content: '';
+  position: absolute;
+  left: 0.35rem;
+  right: 0.35rem;
+  top: -0.65rem;
+  height: 0.75rem;
+  background: #ffd23f;
+  clip-path: polygon(0 100%, 0 0, 28% 55%, 50% 0, 72% 55%, 100% 0, 100% 100%);
+}
+.skin-cube.rainbow {
+  animation: rainbow 3.5s linear infinite;
+}
+@keyframes rainbow {
+  0%, 100% { background: #ff4d6d; }
+  20% { background: #ffd23f; }
+  40% { background: #2ee6a6; }
+  60% { background: #6ec1ff; }
+  80% { background: #b388ff; }
+}
+
+.unlock-badge {
+  background: linear-gradient(90deg, var(--green), var(--gold));
+  color: #0b2a20;
+}
+.unlock-badge[hidden] {
+  display: none;
+}
+.dead-next {
+  margin: -0.2rem 0 0.4rem;
+  min-height: 1.2em;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+}
+.dead-next:empty {
+  display: none;
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  top: calc(5.5rem + var(--safe-t));
+  max-width: min(92vw, 26rem);
+  padding: 0.7rem 1.2rem;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--green), var(--gold));
+  color: #0b2a20;
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+  text-align: center;
+  transform: translate(-50%, -1.5rem) scale(0.9);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.4), opacity 0.25s ease;
+}
+.toast.show {
+  transform: translate(-50%, 0) scale(1);
+  opacity: 1;
+}
+
+@media (max-height: 460px) {
+  .goal {
+    display: none;
+  }
+  .skin-card {
+    min-height: 5.6rem;
+    padding-block: 0.5rem;
+  }
+  .skins-sub {
+    display: none;
+  }
+}

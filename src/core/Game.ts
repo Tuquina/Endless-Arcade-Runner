@@ -6,6 +6,7 @@ import { Generator } from '../world/Generator';
 import { COIN } from '../world/Rect';
 import { World } from '../world/World';
 import { Loop } from './Loop';
+import { DEFAULT_SKIN, findSkin, newlyUnlocked, nextSkin, reconcileUnlocked, type Skin } from './skins';
 import { Renderer } from '../render/Renderer';
 import { AudioSystem } from '../audio/AudioSystem';
 import { Particles } from '../render/Particles';
@@ -57,10 +58,15 @@ export class Game {
   /** Seconds left in the resume countdown. */
   countdown = 0;
   /** UI hooks: called when the state changes, and once per rendered frame. */
+  /** Skins unlocked during the current/last run (shown on the game-over screen). */
+  readonly unlockedNow: Skin[] = [];
+  onUnlock: ((skin: Skin) => void) | null = null;
   onState: (() => void) | null = null;
   onFrame: (() => void) | null = null;
 
   private readonly reducedMotion: boolean = false;
+  /** Smallest goal (m) not reached yet; the per-step check is one comparison. */
+  private nextGoal = Infinity;
   private trailTick = 0;
   private readonly generator = new Generator(this.world);
   private readonly input: Input;
@@ -95,8 +101,63 @@ export class Game {
     // Never lose a run to a notification or tab switch.
     document.addEventListener('visibilitychange', () => document.hidden && this.pause());
     window.addEventListener('blur', () => this.pause());
+    this.reconcileSkins();
     this.resetRun();
     this.audio.setMusicMode('on'); // takes effect after the first user gesture
+  }
+
+  /** Currently selected skin. */
+  get skin(): Skin {
+    return findSkin(this.save.data.skin);
+  }
+
+  /** Next locked skin and its distance goal, or null when all are unlocked. */
+  get nextReward(): Skin | null {
+    return nextSkin(this.save.data.unlocked);
+  }
+
+  get maxDist(): number {
+    return this.save.data.maxDist;
+  }
+
+  isUnlocked(id: string): boolean {
+    return this.save.data.unlocked.includes(id);
+  }
+
+  /** Menu action: wear an unlocked skin. */
+  selectSkin(id: string): void {
+    if (!this.isUnlocked(id)) return;
+    this.save.data.skin = id;
+    this.save.flush();
+    this.applySkin();
+  }
+
+  private applySkin(): void {
+    const skin = this.skin;
+    this.view.setSkin(skin);
+    this.fx.setSkinColor(skin.color);
+  }
+
+  private reconcileSkins(): void {
+    const d = this.save.data;
+    d.unlocked = reconcileUnlocked(d.unlocked, d.maxDist);
+    if (!d.unlocked.includes(d.skin)) d.skin = DEFAULT_SKIN;
+    this.nextGoal = this.nextReward?.goal ?? Infinity;
+    this.applySkin();
+  }
+
+  /** Unlock every skin whose distance goal this run just reached. */
+  private checkGoals(): void {
+    const d = this.save.data;
+    for (const skin of newlyUnlocked(this.distance, d.unlocked)) {
+      d.unlocked.push(skin.id);
+      d.maxDist = Math.max(d.maxDist, skin.goal);
+      this.unlockedNow.push(skin);
+      this.audio.sfx('record');
+      this.onUnlock?.(skin);
+    }
+    this.nextGoal = this.nextReward?.goal ?? Infinity;
+    this.save.flush(); // don't lose the reward if the tab is closed mid-run
   }
 
   get best(): number {
@@ -139,6 +200,7 @@ export class Game {
 
   private beginRun(): void {
     this.bestAtStart = this.save.data.best;
+    this.unlockedNow.length = 0;
     this.save.data.attempts++;
     this.setState('playing');
   }
@@ -217,6 +279,7 @@ export class Game {
     this.distance = Math.max(0, Math.floor(p.x));
     this.score = this.distance + this.coins * COIN_VALUE;
     this.checkRecord();
+    if (this.distance >= this.nextGoal) this.checkGoals();
     this.generator.ensureAhead(p.x + GEN_AHEAD);
     this.world.prune(p.x - KEEP_BEHIND);
     if (p.dead) this.die();
@@ -272,6 +335,7 @@ export class Game {
   private commitRun(): void {
     const d = this.save.data;
     d.coins += this.coins;
+    d.maxDist = Math.max(d.maxDist, this.distance);
     if (this.score > d.best) {
       d.best = this.score;
       d.bestDist = this.distance;

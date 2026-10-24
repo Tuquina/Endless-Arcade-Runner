@@ -2,6 +2,7 @@ import { PLAYER_HEIGHT } from '../physics/constants';
 import type { Game } from '../core/Game';
 import { COIN, HAZARD, SOLID, type Rect } from '../world/Rect';
 import { Confetti } from './Confetti';
+import { GOALS, GOAL_SKIN_IDS } from '../core/skins';
 import { THEMES, ThemeBlender } from './themes';
 
 /** The visible world is always at least this tall and this wide (tiles) → same fairness everywhere. */
@@ -12,6 +13,8 @@ const PLAYER_SCREEN_X = 0.22;
 const GROUND_SCREEN_Y = 0.72;
 /** Anything taller/deeper than this is treated as ground, not a floating block. */
 const GROUND_DEPTH = -1;
+
+const DASH: number[] = [10, 10];
 
 const hash = (i: number): number => {
   const s = Math.sin(i * 127.1 + 311.7) * 43758.5453;
@@ -306,6 +309,28 @@ export class Renderer {
       ctx.beginPath();
       ctx.ellipse(cx, cy, rad * (0.1 + 0.4 * spin), rad * 0.5, 0, 0, 6.283);
       ctx.fill();
+    }
+
+    // Challenge gates: a dashed line at each distance goal (gold until it has been reached).
+    if (game.state !== 'menu') {
+      ctx.setLineDash(DASH);
+      ctx.lineWidth = Math.max(2, scale * 0.06);
+      ctx.font = `800 ${Math.round(scale * 0.42)}px system-ui, sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      for (let i = 0; i < GOALS.length; i++) {
+        const gx = this.X(GOALS[i]!);
+        if (gx < -scale * 3 || gx > this.w + scale) continue;
+        const reached = game.isUnlocked(GOAL_SKIN_IDS[i]!);
+        ctx.strokeStyle = reached ? 'rgba(255,255,255,0.35)' : 'rgba(255,210,63,0.85)';
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.beginPath();
+        ctx.moveTo(gx, this.groundPx);
+        ctx.lineTo(gx, this.groundPx - scale * 6);
+        ctx.stroke();
+        ctx.fillText(`${GOALS[i]} m`, gx + scale * 0.2, this.groundPx - scale * 6);
+      }
+      ctx.setLineDash([]);
     }
 
     // Marker for the personal best distance.

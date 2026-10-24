@@ -34,6 +34,19 @@ describe('Save', () => {
     expect(new Save(fake(JSON.stringify({ music: 'no' }))).data.music).toBe(true);
   });
 
+  it('stores skins and challenge progress, sanitising bad input', () => {
+    const st = fake();
+    const a = new Save(st);
+    expect(a.data).toMatchObject({ maxDist: 0, skin: 'classic', unlocked: ['classic'] });
+    a.data.maxDist = 640;
+    a.data.skin = 'mint';
+    a.data.unlocked = ['classic', 'mint'];
+    a.flush();
+    expect(new Save(st).data).toMatchObject({ maxDist: 640, skin: 'mint', unlocked: ['classic', 'mint'] });
+    const bad = new Save(fake(JSON.stringify({ skin: 7, unlocked: ['a', 3, 'a', '', 'b'], maxDist: -1 })));
+    expect(bad.data).toMatchObject({ skin: 'classic', unlocked: ['a', 'b'], maxDist: 0 });
+  });
+
   it('does not throw when storage is unavailable or full', () => {
     const broken: StorageLike = {
       getItem: () => { throw new Error('denied'); },

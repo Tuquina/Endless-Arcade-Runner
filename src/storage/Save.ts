@@ -11,6 +11,11 @@ export interface SaveData {
   /** Audio switches (applied by the audio system). */
   music: boolean;
   sfx: boolean;
+  /** Longest distance (m) ever reached in one run; drives the skin challenges. */
+  maxDist: number;
+  /** Selected and unlocked skin ids. */
+  skin: string;
+  unlocked: string[];
 }
 
 export const SAVE_KEY = 'onebutton.save.v1';
@@ -21,7 +26,7 @@ export interface StorageLike {
   setItem(key: string, value: string): void;
 }
 
-const defaults = (): SaveData => ({ v: 1, best: 0, bestDist: 0, attempts: 0, coins: 0, music: true, sfx: true });
+const defaults = (): SaveData => ({ v: 1, best: 0, bestDist: 0, attempts: 0, coins: 0, music: true, sfx: true, maxDist: 0, skin: 'classic', unlocked: ['classic'] });
 
 /** Non-negative finite integer, else the fallback. Guards against hand-edited or corrupt storage. */
 function count(value: unknown, fallback: number): number {
@@ -38,6 +43,12 @@ function migrate(raw: unknown): SaveData {
     out.coins = count(o.coins, 0);
     out.music = typeof o.music === 'boolean' ? o.music : true;
     out.sfx = typeof o.sfx === 'boolean' ? o.sfx : true;
+    out.maxDist = count(o.maxDist, 0);
+    if (typeof o.skin === 'string' && o.skin.length > 0 && o.skin.length <= 32) out.skin = o.skin;
+    if (Array.isArray(o.unlocked)) {
+      const ids = o.unlocked.filter((v): v is string => typeof v === 'string' && v.length > 0 && v.length <= 32);
+      out.unlocked = [...new Set(ids)].slice(0, 32);
+    }
   }
   return out;
 }

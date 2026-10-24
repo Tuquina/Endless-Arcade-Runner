@@ -1,6 +1,8 @@
 const HALF_PI = Math.PI / 2;
 const BLINK_LEN = 0.12;
 
+import type { Skin } from '../core/skins';
+
 /** Rounded-rect path helper (arcTo works everywhere, unlike ctx.roundRect on older Safari). */
 function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
@@ -20,12 +22,24 @@ function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
 export class PlayerView {
   color = '#ffd23f';
   shade = '#c79a12';
+  private accessory: Skin['accessory'];
+  private rainbow = false;
+  private hue = 0;
+  private hueKey = -1;
   /** Stretch amount: >0 tall & thin, <0 short & wide. */
   private q = 0;
   private qv = 0;
   private angle = 0;
   private blink = 2;
   private lookY = 0;
+
+  setSkin(skin: Skin): void {
+    this.color = skin.color;
+    this.shade = skin.shade;
+    this.accessory = skin.accessory;
+    this.rainbow = skin.rainbow ?? false;
+    this.hueKey = -1;
+  }
 
   reset(): void {
     this.q = this.qv = this.angle = this.lookY = 0;
@@ -55,6 +69,16 @@ export class PlayerView {
       this.angle += 8.5 * dt;
     }
     this.lookY += (Math.max(-1, Math.min(1, vy / 14)) - this.lookY) * Math.min(1, dt * 14);
+
+    if (this.rainbow) {
+      this.hue = (this.hue + dt * 140) % 360;
+      const key = Math.floor(this.hue / 6); // recolour every 6° → 60 strings per cycle, not 1 per frame
+      if (key !== this.hueKey) {
+        this.hueKey = key;
+        this.color = `hsl(${key * 6} 90% 60%)`;
+        this.shade = `hsl(${key * 6} 70% 42%)`;
+      }
+    }
 
     this.blink -= dt;
     if (this.blink < -BLINK_LEN) this.blink = 2 + Math.random() * 2.5;
@@ -98,6 +122,33 @@ export class PlayerView {
         const pw = eyeW * 0.62;
         ctx.fillRect(x + eyeW - pw, eyeY + eyeH / 2 - pw / 2 - this.lookY * eyeH * 0.22, pw, pw * 1.25);
       }
+    }
+
+    if (this.accessory === 'shades') {
+      ctx.fillStyle = '#14102b';
+      rr(ctx, -0.4 * size, -0.2 * size, 0.34 * size, 0.27 * size, size * 0.08);
+      ctx.fill();
+      rr(ctx, 0.06 * size, -0.2 * size, 0.34 * size, 0.27 * size, size * 0.08);
+      ctx.fill();
+      ctx.fillRect(-0.08 * size, -0.14 * size, 0.16 * size, 0.05 * size);
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.fillRect(-0.33 * size, -0.16 * size, 0.1 * size, 0.04 * size);
+      ctx.fillRect(0.13 * size, -0.16 * size, 0.1 * size, 0.04 * size);
+    } else if (this.accessory === 'crown') {
+      ctx.fillStyle = '#ffd23f';
+      ctx.strokeStyle = '#b8860b';
+      ctx.lineWidth = Math.max(1, size * 0.03);
+      ctx.beginPath();
+      ctx.moveTo(-0.28 * size, -h + size * 0.03);
+      ctx.lineTo(-0.3 * size, -h - size * 0.24);
+      ctx.lineTo(-0.14 * size, -h - size * 0.08);
+      ctx.lineTo(0, -h - size * 0.28);
+      ctx.lineTo(0.14 * size, -h - size * 0.08);
+      ctx.lineTo(0.3 * size, -h - size * 0.24);
+      ctx.lineTo(0.28 * size, -h + size * 0.03);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
     }
     ctx.restore();
   }

@@ -5,12 +5,14 @@ export const P_SHARD = 1;
 export const P_RING = 2;
 export const P_SPARK = 3;
 
-const COLORS = ['#ffffff', '#ffd23f', '#2ee6a6', '#ff4d6d', '#c79a12'];
+const COLORS = ['#ffffff', '#ffd23f', '#2ee6a6', '#ff4d6d', '#c79a12', '#ffd23f'];
 export const C_WHITE = 0;
 export const C_GOLD = 1;
 export const C_GREEN = 2;
 export const C_PINK = 3;
 export const C_DARK = 4;
+/** Slot recoloured to match the selected skin (trail and death burst). */
+export const C_SKIN = 5;
 
 /**
  * Pool of world-space particles in parallel typed arrays (no per-particle objects). Spawning
@@ -32,6 +34,11 @@ export class Particles {
   private cursor = 0;
   /** 1 normally; lower for reduced-motion users. */
   density = 1;
+  private readonly palette = COLORS.slice();
+
+  setSkinColor(color: string): void {
+    this.palette[C_SKIN] = color;
+  }
 
   clear(): void {
     this.life.fill(0);
@@ -74,7 +81,7 @@ export class Particles {
 
   /** Little fading square left behind while airborne. */
   trail(x: number, y: number): void {
-    this.spawn(P_SHARD, x, y, -2, 0, 0.3, 0.22, C_GOLD, 0, 0);
+    this.spawn(P_SHARD, x, y, -2, 0, 0.3, 0.22, C_SKIN, 0, 0);
   }
 
   coin(x: number, y: number): void {
@@ -92,7 +99,7 @@ export class Particles {
       for (let gx = 0; gx < 3; gx++) {
         const dx = gx - 1;
         const dy = gy - 1;
-        this.spawn(P_SHARD, x + dx * 0.3, y + 0.5 + dy * 0.3, dx * 3 + (Math.random() - 0.5) * 3 - 2, 5 + dy * 3 + Math.random() * 3, 0.9 + Math.random() * 0.5, 0.28, C_GOLD, -26, (Math.random() - 0.5) * 12);
+        this.spawn(P_SHARD, x + dx * 0.3, y + 0.5 + dy * 0.3, dx * 3 + (Math.random() - 0.5) * 3 - 2, 5 + dy * 3 + Math.random() * 3, 0.9 + Math.random() * 0.5, 0.28, C_SKIN, -26, (Math.random() - 0.5) * 12);
       }
     }
     const n = Math.ceil(10 * this.density);
@@ -125,7 +132,7 @@ export class Particles {
       const s = this.size[i]! * scale;
       const kind = this.kind[i]!;
       ctx.globalAlpha = Math.min(1, t * 1.6);
-      ctx.fillStyle = COLORS[this.color[i]!]!;
+      ctx.fillStyle = this.palette[this.color[i]!]!;
       if (kind === P_DUST) {
         ctx.beginPath();
         ctx.arc(px, py, s * (0.6 + (1 - t) * 0.8), 0, 6.283);
