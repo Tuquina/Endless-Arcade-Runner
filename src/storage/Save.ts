@@ -83,7 +83,27 @@ export class Save {
     }
   }
 
+  /**
+   * Write to storage, first merging in what another tab may have saved since we loaded, so a
+   * stale tab can never erase progress (records and unlocks only ever grow).
+   */
   flush(): void {
+    try {
+      const text = this.storage?.getItem(SAVE_KEY);
+      if (text) {
+        const other = migrate(JSON.parse(text));
+        const d = this.data;
+        if (other.best > d.best) {
+          d.best = other.best;
+          d.bestDist = other.bestDist;
+        }
+        d.maxDist = Math.max(d.maxDist, other.maxDist);
+        d.attempts = Math.max(d.attempts, other.attempts);
+        d.unlocked = [...new Set([...d.unlocked, ...other.unlocked])];
+      }
+    } catch {
+      /* unreadable storage: just overwrite below */
+    }
     try {
       this.storage?.setItem(SAVE_KEY, JSON.stringify(this.data));
     } catch {

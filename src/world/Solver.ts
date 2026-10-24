@@ -25,14 +25,21 @@ export function solve(
   speedAt: (x: number) => number,
   margin = 0.15,
 ): SolveResult {
-  const visited = new Set<number>();
-  const stack: Player[] = [];
-  let furthest = startX;
-
   const start = new Player();
   start.reset(startX);
   start.margin = margin;
   start.speed = speedAt(startX);
+  return solveFrom(world, start, endX, speedAt);
+}
+
+/** Same search, starting from an arbitrary (alive) player state, which is not modified. */
+export function solveFrom(world: World, from: Player, endX: number, speedAt: (x: number) => number): SolveResult {
+  const visited = new Set<number>();
+  const stack: Player[] = [];
+  let furthest = from.x;
+
+  const start = new Player();
+  start.copyFrom(from);
   stack.push(start);
 
   const key = (p: Player): number =>
@@ -70,6 +77,15 @@ export function solve(
   }
   return { ok: false, furthest };
 }
+
+/** Jump from `s` with a given hold time; returns the player once landed, or null if it dies/never lands. */
+export function tryJump(s: Player, world: World, hold: number, endX: number, speedAt: (x: number) => number): Player | null {
+  const c = new Player();
+  c.copyFrom(s);
+  return flyUntilLanding(c, world, hold, endX, speedAt) ? c : null;
+}
+
+export { HOLDS };
 
 /** Jump from `c`, hold for `hold` seconds, then coast until it lands. false if it dies. */
 function flyUntilLanding(c: Player, world: World, hold: number, endX: number, speedAt: (x: number) => number): boolean {

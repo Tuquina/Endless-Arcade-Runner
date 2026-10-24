@@ -5,12 +5,18 @@ import { Confetti } from './Confetti';
 import { GOALS, GOAL_SKIN_IDS } from '../core/skins';
 import { THEMES, ThemeBlender } from './themes';
 
-/** The visible world is always at least this tall and this wide (tiles) → same fairness everywhere. */
+/**
+ * The visible world is always at least this tall and this wide (tiles) → same fairness everywhere.
+ * 14 wide keeps ≥ 11 tiles (≈ 0.85 s at top speed) of warning ahead on a vertical phone while
+ * making the character ~14 % larger than a 16-tile view would.
+ */
 const MIN_VIEW_H = 10;
-const MIN_VIEW_W = 16;
+const MIN_VIEW_W = 14;
 /** Where the player sits horizontally (fraction of the visible width) and where the ground sits vertically. */
-const PLAYER_SCREEN_X = 0.22;
+const PLAYER_SCREEN_X = 0.2;
 const GROUND_SCREEN_Y = 0.72;
+/** Canvas pixel budget (width × height in device pixels). */
+const MAX_PIXELS = 4_200_000;
 /** Anything taller/deeper than this is treated as ground, not a floating block. */
 const GROUND_DEPTH = -1;
 
@@ -47,13 +53,19 @@ export class Renderer {
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d', { alpha: false })!;
     new ResizeObserver(() => this.resize()).observe(canvas);
+    // Moving the window to a screen with another pixel density changes DPR without resizing the canvas.
+    window.addEventListener('resize', () => this.resize());
     this.resize();
   }
 
   private resize(): void {
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.w = Math.max(1, Math.round(this.canvas.clientWidth * this.dpr));
-    this.h = Math.max(1, Math.round(this.canvas.clientHeight * this.dpr));
+    const cssW = Math.max(1, this.canvas.clientWidth);
+    const cssH = Math.max(1, this.canvas.clientHeight);
+    // Crisp on dense phone screens, but never more pixels than a mid-range GPU fills comfortably
+    // (a 4K monitor at 2x would otherwise be an 8-megapixel canvas).
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(MAX_PIXELS / (cssW * cssH)));
+    this.w = Math.max(1, Math.round(cssW * this.dpr));
+    this.h = Math.max(1, Math.round(cssH * this.dpr));
     this.canvas.width = this.w;
     this.canvas.height = this.h;
     this.scale = Math.min(this.h / MIN_VIEW_H, this.w / MIN_VIEW_W);

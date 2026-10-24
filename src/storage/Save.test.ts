@@ -47,6 +47,22 @@ describe('Save', () => {
     expect(bad.data).toMatchObject({ skin: 'classic', unlocked: ['a', 'b'], maxDist: 0 });
   });
 
+  it('a stale second tab cannot erase progress made in the first', () => {
+    const st = fake();
+    const tabA = new Save(st);
+    const tabB = new Save(st); // loaded while everything was still zero
+    tabA.data.best = 500;
+    tabA.data.bestDist = 480;
+    tabA.data.maxDist = 1200;
+    tabA.data.unlocked = ['classic', 'mint', 'rose', 'shades'];
+    tabA.flush();
+    tabB.data.attempts = 3;
+    tabB.flush();
+    const merged = new Save(st).data;
+    expect(merged).toMatchObject({ best: 500, bestDist: 480, maxDist: 1200, attempts: 3 });
+    expect(merged.unlocked).toEqual(['classic', 'mint', 'rose', 'shades']);
+  });
+
   it('does not throw when storage is unavailable or full', () => {
     const broken: StorageLike = {
       getItem: () => { throw new Error('denied'); },
