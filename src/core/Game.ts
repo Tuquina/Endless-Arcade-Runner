@@ -7,6 +7,7 @@ import { COIN } from '../world/Rect';
 import { World } from '../world/World';
 import { Loop } from './Loop';
 import { Renderer } from '../render/Renderer';
+import { AudioSystem } from '../audio/AudioSystem';
 import { Particles } from '../render/Particles';
 import { PlayerView } from '../render/PlayerView';
 
@@ -30,6 +31,7 @@ export class Game {
   readonly player = new Player();
   readonly world = new World(256);
   readonly save = new Save();
+  readonly audio = new AudioSystem(() => this.save.data);
   difficulty = 0;
   /** Metres travelled this run (floor of x). */
   distance = 0;
@@ -94,6 +96,7 @@ export class Game {
     document.addEventListener('visibilitychange', () => document.hidden && this.pause());
     window.addEventListener('blur', () => this.pause());
     this.resetRun();
+    this.audio.setMusicMode('on'); // takes effect after the first user gesture
   }
 
   get best(): number {
@@ -130,6 +133,7 @@ export class Game {
 
   private setState(next: GameState): void {
     this.state = next;
+    this.audio.setMusicMode(next === 'dead' ? 'off' : next === 'paused' ? 'duck' : 'on');
     this.onState?.();
   }
 
@@ -206,6 +210,7 @@ export class Game {
     const p = this.player;
     this.difficulty = difficultyAt(p.x);
     p.speed = speedAt(this.difficulty);
+    this.audio.intensity = this.difficulty;
     p.step(dt, pressed, held, this.world);
     this.playEffects(p);
     this.collectCoins();
@@ -220,10 +225,12 @@ export class Game {
   /** Turn this step's physics events into particles and character animation. */
   private playEffects(p: Player): void {
     if (p.jumped) {
+      this.audio.sfx('jump');
       this.fx.jump(p.x, p.y);
       this.view.jump();
     }
     if (p.landed) {
+      this.audio.sfx('land', p.landSpeed / 20);
       this.fx.land(p.x, p.y, p.landSpeed);
       this.view.land(p.landSpeed);
     }
@@ -237,6 +244,7 @@ export class Game {
       if (!c) return;
       c.taken = true;
       this.coins++;
+      this.audio.coin();
       this.fx.coin((c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2);
     }
   }
@@ -245,6 +253,7 @@ export class Game {
     if (!this.newRecord && this.bestAtStart > 0 && this.score > this.bestAtStart) {
       this.newRecord = true;
       this.celebrate = true;
+      this.audio.sfx('record');
     }
   }
 
@@ -252,6 +261,7 @@ export class Game {
     this.deadTime = 0;
     this.commitRun();
     // Burst at the body's last position (clamped so a fall into a pit is still visible).
+    this.audio.sfx('death');
     this.fx.death(this.player.x, Math.max(this.player.y, -1));
     if (!this.reducedMotion) this.shake = 1;
     this.flash = 0.6;

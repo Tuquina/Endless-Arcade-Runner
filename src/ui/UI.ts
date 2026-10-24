@@ -149,6 +149,7 @@ export class UI {
     const target = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (target?.dataset.action === 'retry') {
       e.preventDefault();
+      this.game.audio.sfx('click');
       this.game.retry();
     }
   };
@@ -157,6 +158,8 @@ export class UI {
     const target = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (!target) return;
     const g = this.game;
+    // UI feedback sound (the retry tap has its own path through pointerdown).
+    g.audio.sfx('click');
     switch (target.dataset.action) {
       case 'play':
         g.play();
@@ -181,11 +184,13 @@ export class UI {
       case 'toggle-music':
         g.save.data.music = !g.save.data.music;
         g.save.flush();
+        g.audio.refresh();
         this.refreshToggles();
         break;
       case 'toggle-sfx':
         g.save.data.sfx = !g.save.data.sfx;
         g.save.flush();
+        g.audio.refresh();
         this.refreshToggles();
         break;
     }
