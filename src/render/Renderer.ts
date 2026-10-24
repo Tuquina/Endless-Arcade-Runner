@@ -93,7 +93,7 @@ export class Renderer {
 
     // Marker for the personal best distance (a thin vertical line with a flag).
     const bd = game.save.data.bestDist;
-    if (bd > 0 && game.state !== 'ready') {
+    if (bd > 0 && game.state !== 'menu') {
       const bx = sx(bd);
       if (bx > -scale && bx < this.w + scale) {
         ctx.fillStyle = 'rgba(255,255,255,0.35)';
@@ -102,7 +102,7 @@ export class Renderer {
         ctx.font = `700 ${Math.round(scale * 0.4)}px system-ui, sans-serif`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.fillText('BEST', bx + 6, groundPx * 0.25);
+        ctx.fillText('RÉCORD', bx + 6, groundPx * 0.25);
       }
     }
 
@@ -124,51 +124,20 @@ export class Renderer {
     this.confetti.update(frameDt, scale * 14);
     this.confetti.draw(ctx, scale * 0.2);
     this.bannerT = Math.max(0, this.bannerT - frameDt);
-    this.drawHud(game);
+    this.drawBanner(game);
   }
 
-  private drawHud(game: Game): void {
+  /** Only the in-world "new record" banner lives on the canvas; the rest of the HUD is DOM. */
+  private drawBanner(game: Game): void {
+    if (this.bannerT <= 0 || game.state !== 'playing') return;
     const { ctx, scale } = this;
-    const pad = scale * 0.5;
-    const font = (mult: number): string => `700 ${Math.round(scale * mult)}px system-ui, sans-serif`;
-    ctx.fillStyle = '#ffffff';
-    ctx.textBaseline = 'top';
-    ctx.textAlign = 'left';
-    ctx.font = font(0.8);
-    ctx.fillText(String(game.score), pad, pad);
-    ctx.font = font(0.4);
-    ctx.globalAlpha = 0.75;
-    ctx.fillText(`BEST ${Math.max(game.best, game.score)}`, pad, pad + scale * 0.95);
-    ctx.globalAlpha = 1;
-
-    ctx.textAlign = 'right';
-    ctx.font = font(0.4);
+    ctx.globalAlpha = Math.min(1, this.bannerT / 0.4, (2 - this.bannerT) / 0.2 + 0.01);
     ctx.fillStyle = '#ffd23f';
-    ctx.fillText(`● ${game.coins}`, this.w - pad, pad);
-    ctx.fillStyle = '#ffffff';
-    ctx.globalAlpha = 0.75;
-    ctx.fillText(`LV ${game.level}  ·  TRY ${game.attempts}`, this.w - pad, pad + scale * 0.6);
-    ctx.globalAlpha = 1;
-
     ctx.textAlign = 'center';
-    if (game.state === 'ready') {
-      ctx.font = font(0.9);
-      ctx.fillText('TAP TO START', this.w / 2, this.h * 0.28);
-    } else if (game.state === 'dead') {
-      ctx.font = font(1.1);
-      ctx.fillText(`${game.score}`, this.w / 2, this.h * 0.2);
-      ctx.font = font(0.5);
-      ctx.fillText(game.newRecord ? 'NEW RECORD!' : `BEST ${game.best}`, this.w / 2, this.h * 0.2 + scale * 1.3);
-      ctx.fillText('TAP TO RETRY', this.w / 2, this.h * 0.2 + scale * 2.1);
-    }
-    if (this.bannerT > 0 && game.state === 'playing') {
-      const t = Math.min(1, this.bannerT / 0.4, (2 - this.bannerT) / 0.2 + 0.01);
-      ctx.globalAlpha = Math.min(1, t);
-      ctx.fillStyle = '#ffd23f';
-      ctx.font = font(0.9 + 0.2 * Math.min(1, (2 - this.bannerT) * 4));
-      ctx.fillText('NEW RECORD!', this.w / 2, this.h * 0.12);
-      ctx.globalAlpha = 1;
-    }
+    ctx.textBaseline = 'top';
+    ctx.font = `800 ${Math.round(scale * (0.9 + 0.2 * Math.min(1, (2 - this.bannerT) * 4)))}px system-ui, sans-serif`;
+    ctx.fillText('¡NUEVO RÉCORD!', this.w / 2, this.h * 0.14);
+    ctx.globalAlpha = 1;
   }
 
   private drawDebug(game: Game, sx: (x: number) => number, sy: (y: number) => number, fps: number): void {

@@ -8,13 +8,15 @@ import { World } from '../world/World';
 import { Loop } from './Loop';
 import { Renderer } from '../render/Renderer';
 
-export type GameState = 'ready' | 'playing' | 'dead';
+export type GameState = 'menu' | 'playing' | 'paused' | 'countdown' | 'dead';
 
 /** How far ahead of the player geometry is generated, and how far behind it is kept (tiles). */
 const GEN_AHEAD = 60;
 const KEEP_BEHIND = 20;
 /** Ignore taps this long after dying so a panicked double-tap doesn't skip the result. */
 const RETRY_DELAY = 0.2;
+/** Seconds of 3-2-1 after resuming from pause, so the player can get their thumb ready. */
+const RESUME_COUNTDOWN = 1.8;
 /** Score awarded per coin, on top of metres travelled. */
 export const COIN_VALUE = 10;
 /** Difficulty is shown to the player as a level from 1 to this value. */
@@ -22,7 +24,7 @@ export const MAX_LEVEL = 10;
 
 /** Owns the simulation and wires input → physics → world → renderer. */
 export class Game {
-  state: GameState = 'ready';
+  state: GameState = 'menu';
   readonly player = new Player();
   readonly world = new World(256);
   readonly save = new Save();
@@ -40,6 +42,11 @@ export class Game {
   /** One-shot flag the renderer consumes to fire the record celebration. */
   celebrate = false;
   readonly debug: boolean;
+  /** Seconds left in the resume countdown. */
+  countdown = 0;
+  /** UI hooks: called when the state changes, and once per rendered frame. */
+  onState: (() => void) | null = null;
+  onFrame: (() => void) | null = null;
 
   private readonly generator = new Generator(this.world);
   private readonly input: Input;
@@ -61,10 +68,14 @@ export class Game {
       (alpha, frameDt) => {
         this.fps += (1 / Math.max(frameDt, 1e-4) - this.fps) * 0.05;
         this.renderer.render(this, alpha, frameDt, this.fps);
+        this.onFrame?.();
       },
     );
     // Persist coins/attempts if the tab is closed mid-run.
     window.addEventListener('pagehide', () => this.save.flush());
+    // Never lose a run to a notification or tab switch.
+    document.addEventListener('visibilitychange', () => document.hidden && this.pause());
+    window.addEventListener('blur', () => this.pause());
     this.resetRun();
   }
 
@@ -95,32 +106,70 @@ export class Game {
     this.distance = this.coins = this.score = 0;
     this.deadTime = 0;
     this.newRecord = false;
-    this.state = 'ready';
+  }
+
+  private setState(next: GameState): void {
+    this.state = next;
+    this.onState?.();
   }
 
   private beginRun(): void {
     this.bestAtStart = this.save.data.best;
     this.save.data.attempts++;
-    this.state = 'playing';
+    this.setState('playing');
   }
 
-  /** Reset and start immediately (retry after dying: no extra tap needed). */
-  restart(): void {
+  /** Start a new run right away (from the menu or after dying). */
+  play(): void {
+    if (this.state !== 'menu' && this.state !== 'dead') return;
     this.resetRun();
     this.beginRun();
+  }
+
+  pause(): void {
+    if (this.state === 'playing') this.setState('paused');
+  }
+
+  resume(): void {
+    if (this.state !== 'paused') return;
+    this.countdown = RESUME_COUNTDOWN;
+    this.setState('countdown');
+  }
+
+  /** Tap on the game-over screen: same guard as the in-canvas retry. */
+  retry(): void {
+    if (this.state === 'dead' && this.deadTime > RETRY_DELAY) this.play();
+  }
+
+  togglePause(): void {
+    if (this.state === 'playing') this.pause();
+    else if (this.state === 'paused') this.resume();
+  }
+
+  /** Back to the main menu; an abandoned run still banks its coins and score. */
+  toMenu(): void {
+    if (this.state === 'paused' || this.state === 'countdown') this.commitRun();
+    this.resetRun();
+    this.setState('menu');
   }
 
   private update(dt: number): void {
     this.input.poll(this.poll);
     const { pressed, held } = this.poll;
 
-    if (this.state === 'ready') {
-      if (pressed) this.beginRun();
+    if (this.state === 'menu') {
+      if (pressed) this.play();
+      return;
+    }
+    if (this.state === 'paused') return;
+    if (this.state === 'countdown') {
+      this.countdown -= dt;
+      if (this.countdown <= 0) this.setState('playing');
       return;
     }
     if (this.state === 'dead') {
       this.deadTime += dt;
-      if (pressed && this.deadTime > RETRY_DELAY) this.restart();
+      if (pressed && this.deadTime > RETRY_DELAY) this.play();
       return;
     }
 
@@ -155,8 +204,13 @@ export class Game {
   }
 
   private die(): void {
-    this.state = 'dead';
     this.deadTime = 0;
+    this.commitRun();
+    this.setState('dead');
+  }
+
+  /** Bank this run's coins and best score, and persist. */
+  private commitRun(): void {
     const d = this.save.data;
     d.coins += this.coins;
     if (this.score > d.best) {

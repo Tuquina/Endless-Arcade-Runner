@@ -11,6 +11,75 @@
   </head>
   <body>
     <canvas id="game" aria-label="ONE BUTTON"></canvas>
+
+    <div id="ui">
+      <!-- In-run HUD: only score, best and pause (plus two tiny stats). Never intercepts taps except the button. -->
+      <div id="hud" class="hud" data-show="false">
+        <div class="hud-left">
+          <div id="hud-score" class="hud-score">0</div>
+          <div class="hud-best">RÉCORD <span id="hud-best">0</span></div>
+        </div>
+        <div class="hud-right">
+          <div class="chips">
+            <span class="chip"><i class="coin-dot"></i><span id="hud-coins">0</span></span>
+            <span class="chip">NV <span id="hud-level">1</span></span>
+          </div>
+          <button id="btn-pause" class="icon-btn" aria-label="Pausa" data-action="pause">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <section id="screen-menu" class="screen" data-show="true" aria-label="Menú principal">
+        <div class="panel menu">
+          <div class="mascot" aria-hidden="true"><i></i><i></i></div>
+          <h1 class="logo"><span>ONE</span><span>BUTTON</span></h1>
+          <p class="menu-best">RÉCORD <b id="menu-best">0</b></p>
+          <button class="btn btn-primary" data-action="play">Jugar</button>
+          <button class="btn btn-ghost" data-action="settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.2 5.2-.1-.9 1.7-1.3-1.7-3-2 .8a7 7 0 0 0-1.5-.9l-.3-2.1h-3.4l-.3 2.1c-.5.2-1 .5-1.5.9l-2-.8-1.7 3 1.7 1.3-.1.9.1.9-1.7 1.3 1.7 3 2-.8c.5.4 1 .7 1.5.9l.3 2.1h3.4l.3-2.1c.5-.2 1-.5 1.5-.9l2 .8 1.7-3-1.7-1.3Z"/></svg>
+            Ajustes
+          </button>
+          <p class="hint">
+            <span class="hint-pc">Espacio · clic · ↑</span><span class="hint-touch">Tocá la pantalla</span><br />
+            Tocá para saltar · mantené para saltar más alto
+          </p>
+        </div>
+      </section>
+
+      <section id="screen-pause" class="screen" data-show="false" aria-label="Pausa">
+        <div class="panel">
+          <h2 class="title">Pausa</h2>
+          <button class="btn btn-primary" data-action="resume">Continuar</button>
+          <button class="btn btn-ghost" data-action="settings">Ajustes</button>
+          <button class="btn btn-ghost" data-action="menu">Menú principal</button>
+        </div>
+      </section>
+
+      <!-- Whole overlay is a retry target: tap anywhere to go again; only the menu button opts out. -->
+      <section id="screen-dead" class="screen" data-show="false" data-action="retry" aria-label="Fin de la partida">
+        <div class="panel">
+          <p id="dead-record" class="record-badge" hidden>¡Nuevo récord!</p>
+          <p class="dead-label">Puntuación</p>
+          <p id="dead-score" class="dead-score">0</p>
+          <p class="dead-meta">Récord <b id="dead-best">0</b> · <i class="coin-dot"></i> <b id="dead-coins">0</b></p>
+          <button class="btn btn-primary btn-xl" data-action="retry">Reintentar</button>
+          <button class="btn btn-ghost" data-action="menu">Menú principal</button>
+        </div>
+      </section>
+
+      <section id="screen-settings" class="screen" data-show="false" aria-label="Ajustes">
+        <div class="panel">
+          <h2 class="title">Ajustes</h2>
+          <button class="toggle" role="switch" aria-checked="true" data-action="toggle-music"><span>Música</span><i></i></button>
+          <button class="toggle" role="switch" aria-checked="true" data-action="toggle-sfx"><span>Efectos</span><i></i></button>
+          <button class="btn btn-ghost" data-action="back">Volver</button>
+        </div>
+      </section>
+
+      <div id="countdown" class="countdown" aria-live="assertive"></div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

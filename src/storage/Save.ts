@@ -8,6 +8,9 @@ export interface SaveData {
   attempts: number;
   /** Lifetime coins. */
   coins: number;
+  /** Audio switches (applied by the audio system). */
+  music: boolean;
+  sfx: boolean;
 }
 
 export const SAVE_KEY = 'onebutton.save.v1';
@@ -18,7 +21,7 @@ export interface StorageLike {
   setItem(key: string, value: string): void;
 }
 
-const defaults = (): SaveData => ({ v: 1, best: 0, bestDist: 0, attempts: 0, coins: 0 });
+const defaults = (): SaveData => ({ v: 1, best: 0, bestDist: 0, attempts: 0, coins: 0, music: true, sfx: true });
 
 /** Non-negative finite integer, else the fallback. Guards against hand-edited or corrupt storage. */
 function count(value: unknown, fallback: number): number {
@@ -33,6 +36,8 @@ function migrate(raw: unknown): SaveData {
     out.bestDist = count(o.bestDist, 0);
     out.attempts = count(o.attempts, 0);
     out.coins = count(o.coins, 0);
+    out.music = typeof o.music === 'boolean' ? o.music : true;
+    out.sfx = typeof o.sfx === 'boolean' ? o.sfx : true;
   }
   return out;
 }

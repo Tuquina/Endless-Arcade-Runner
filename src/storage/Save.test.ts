@@ -24,6 +24,16 @@ describe('Save', () => {
     expect(s.data).toMatchObject({ best: 0, attempts: 0, coins: 0, bestDist: 12 });
   });
 
+  it('keeps audio settings and defaults them to on', () => {
+    const st = fake();
+    const a = new Save(st);
+    expect(a.data).toMatchObject({ music: true, sfx: true });
+    a.data.music = false;
+    a.flush();
+    expect(new Save(st).data).toMatchObject({ music: false, sfx: true });
+    expect(new Save(fake(JSON.stringify({ music: 'no' }))).data.music).toBe(true);
+  });
+
   it('does not throw when storage is unavailable or full', () => {
     const broken: StorageLike = {
       getItem: () => { throw new Error('denied'); },
