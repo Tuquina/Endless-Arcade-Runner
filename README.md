@@ -23,11 +23,12 @@ npm run dev        # servidor de desarrollo
 npm test           # tests (física, generador, solver, justicia, audio, guardado…)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + build estático en dist/
+npm run gen:variants  # regenera la tabla de variantes justas (solo si cambiás segmentos con timing aleatorio)
 npm run preview    # servir dist/ localmente
 ```
 
 Parámetros de URL para depurar: `?debug` (hitboxes, FPS, `window.game`), `?seed=N` (mismo nivel siempre),
-`?theme=N` (empezar con la paleta N, 0–4).
+`?theme=N` (empezar con la paleta N, 0–4), `?at=N` (empezar N metros adelante para ver el tramo final sin llegar).
 
 ## Cómo está organizado
 
@@ -36,7 +37,7 @@ src/
   core/      Game (máquina de estados), Loop (paso fijo), Rng, Pool, skins/desafíos
   input/     un solo "botón" a partir de teclado, mouse, touch y lápiz
   physics/   constantes de ajuste, Player (salto variable, coyote time, jump buffer), jumpModel
-  world/     World (geometría), segmentos prefabricados, Generator, Difficulty, Solver
+  world/     World (geometría y movers), segmentos prefabricados, Generator, Difficulty, Solver, tabla de variantes
   render/    Renderer, temas/paletas, partículas, animación del personaje, confeti
   audio/     síntesis WebAudio: efectos, música y AudioSystem (autoplay, interruptores)
   storage/   Save (localStorage versionado, a prueba de datos corruptos y de varias pestañas)
@@ -57,6 +58,37 @@ Decisiones de diseño que conviene conocer:
   Si agregás un segmento en `src/world/segments/index.ts`, los tests lo validan solos.
 - **Sin garbage en el bucle**: objetos y partículas reutilizados, caché de gradientes y colores.
 - **Audio 100 % procedural** (sin archivos). El contexto se crea y reanuda en el primer gesto del usuario.
+
+## Progresión: cómo cambia el juego al avanzar
+
+| Distancia | Novedad |
+|---|---|
+| 0 m | pinchos |
+| 150 m | bloques |
+| 300 m | pozos |
+| 350 m | tramos de monedas (descanso con premio) |
+| 500 m | plataformas elevadas |
+| 800 m | **sierras móviles**: suben y bajan siguiendo un riel |
+| 1000 m | **techos bajos**: el salto se corta, hay que medir la altura |
+| 1200 m | combos de timing + altura |
+| 1600 m | **prensas**: columnas que se estrellan contra el suelo (tiemblan un instante antes) |
+| 2400 m | **gauntlets**: varios obstáculos encadenados; más frecuentes con la presión |
+
+Cada mundo (400 m, con su propia paleta) favorece unos obstáculos: Neón pinchos, Atardecer bloques y pozos,
+Océano sierras, Bosque plataformas y techos, Vacío prensas. Después de 2400 m, la *presión* sigue subiendo
+(descansos más cortos, más gauntlets) aunque la velocidad ya esté al máximo.
+
+### Obstáculos móviles y por qué siempre se pueden pasar
+
+El movimiento de una sierra o una prensa depende de **la posición del corredor** (no de un reloj), así que cada
+partida es idéntica y el solver puede razonar sobre ellas con exactitud. Como la fase de cada obstáculo es
+aleatoria, no se usa cualquiera: cada diseño con timing aleatorio (sierras, techos, prensas, gauntlets) es una
+*variante* numerada, y `npm run gen:variants` guarda en `src/world/variantTable.ts` cuáles son justas en cada
+dificultad. Una variante es justa si se puede terminar desde cualquier punto donde el corredor pudo aterrizar,
+con margen de hitbox, en distintas alineaciones de paso y a todas las velocidades de su tramo, y si la ventana
+para saltar es de tamaño humano. El generador solo usa variantes de esa tabla (coste en el juego: ~0,7 ms por
+cada 1000 m). Los tests comprueban que la tabla está al día: **si editás un segmento marcado `validate`,
+ejecutá `npm run gen:variants` (~2 min) y commiteá el resultado**.
 
 ## Desafíos y aspectos
 

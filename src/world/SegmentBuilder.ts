@@ -1,5 +1,5 @@
 import { SPIKE_HIT_HEIGHT, SPIKE_HIT_INSET } from '../physics/constants';
-import { HAZARD, SOLID } from './Rect';
+import { HAZARD, SOLID, WAVE_SINE, WAVE_SLAM } from './Rect';
 import type { World } from './World';
 
 /**
@@ -36,6 +36,26 @@ export class SegmentBuilder {
   /** Thin floating platform whose top surface is at `top`. */
   platform(x: number, w: number, top: number): void {
     this.world.add(this.base + x, top - 0.3, this.base + x + w, top, SOLID);
+  }
+
+  /**
+   * Bobbing saw: a small hazard that slides up by `amp` tiles from its rest height. `phase` (0..1) is
+   * where in its cycle it is when the runner is directly beneath it, so prefabs can pick any timing.
+   */
+  orb(cx: number, rest: number, amp: number, wavelength: number, phase: number, size = 0.6): void {
+    const x = this.base + cx;
+    this.world.addMover(x - size / 2, rest, x + size / 2, rest + size, amp, wavelength, phase, WAVE_SINE, rest + amp + size + 0.4);
+  }
+
+  /** Column that slams down to the ground and lifts back up; the runner must pass while it is raised. */
+  crusher(cx: number, w: number, amp: number, wavelength: number, phase: number): void {
+    const x = this.base + cx;
+    this.world.addMover(x - w / 2, 0, x + w / 2, 12, amp, wavelength, phase, WAVE_SLAM, 12);
+  }
+
+  /** Solid slab hanging in the air whose underside is at `bottom` (a ceiling the jump bonks into). */
+  ceiling(x: number, w: number, bottom: number): void {
+    this.world.add(this.base + x, bottom, this.base + x + w, bottom + 0.5, SOLID);
   }
 
   pit(x: number, w: number): void {

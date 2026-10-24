@@ -155,7 +155,7 @@ export class Player {
 
     this.coyote = this.grounded ? COYOTE_TIME : Math.max(0, this.coyote - dt);
 
-    if (this.y < DEATH_Y || world.overlap(this.x - hw, this.y, this.x + hw, this.y + h, HAZARD)) {
+    if (this.y < DEATH_Y || world.overlap(this.x - hw, this.y, this.x + hw, this.y + h, HAZARD, this.x)) {
       this.dead = true;
     }
   }

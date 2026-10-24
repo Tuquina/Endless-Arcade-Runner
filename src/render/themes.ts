@@ -1,3 +1,5 @@
+import { WORLD_LENGTH } from '../world/Difficulty';
+
 /** Colour palette of one world. Colours are 0xRRGGBB so they can be blended without allocating. */
 export interface Theme {
   name: string;
@@ -22,7 +24,7 @@ export const THEMES: readonly Theme[] = [
 ];
 
 /** Distance (tiles) each world lasts, and how long the cross-fade into the next one takes. */
-export const THEME_LENGTH = 400;
+export const THEME_LENGTH = WORLD_LENGTH;
 export const THEME_FADE = 60;
 
 const KEYS = ['skyTop', 'skyBottom', 'far', 'mid', 'ground', 'groundTop', 'block', 'blockTop', 'spike', 'pit'] as const;

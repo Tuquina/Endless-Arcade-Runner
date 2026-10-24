@@ -13,5 +13,15 @@ export interface Prefab {
   /** Difficulty window in which this prefab may be picked. */
   minD: number;
   maxD: number;
+  /** Relative pick frequency (default 1). */
+  weight?: number;
+  /**
+   * Layouts whose fairness depends on random timing (movers, ceilings, gauntlets) are not drawn
+   * freely: each is a numbered *variant* (its own seed), and `npm run gen:variants` records which
+   * variants are provably fair at each difficulty (see variants.ts). The generator only uses those.
+   */
+  validate?: boolean;
+  /** Reward segment: forces a generous coin arc over it. */
+  bonusCoins?: boolean;
   build(b: SegmentBuilder, r: Rng, d: number): void;
 }
