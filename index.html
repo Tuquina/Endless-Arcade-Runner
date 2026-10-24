@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#120c2e" />
+    <meta name="description" content="ONE BUTTON: un runner arcade de un solo botón. Tocá para saltar, mantené para saltar más alto." />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='6' width='52' height='52' rx='14' fill='%23ffd23f'/%3E%3Crect x='20' y='24' width='8' height='14' rx='4' fill='%232b1d5c'/%3E%3Crect x='36' y='24' width='8' height='14' rx='4' fill='%232b1d5c'/%3E%3C/svg%3E"
+    />
+    <title>ONE BUTTON</title>
+  </head>
+  <body>
+    <noscript><p style="color:#fff;font:700 1.2rem system-ui;padding:2rem">ONE BUTTON necesita JavaScript.</p></noscript>
+    <canvas id="game" aria-label="ONE BUTTON"></canvas>
+
+    <div id="ui">
+      <!-- In-run HUD: only score, best and pause (plus two tiny stats). Never intercepts taps except the button. -->
+      <div id="hud" class="hud" data-show="false">
+        <div class="hud-left">
+          <div id="hud-score" class="hud-score">0</div>
+          <div class="hud-best">RÉCORD <span id="hud-best">0</span></div>
+        </div>
+        <div class="hud-right">
+          <div class="chips">
+            <span class="chip"><i class="coin-dot"></i><span id="hud-coins">0</span></span>
+            <span class="chip">NV <span id="hud-level">1</span></span>
+          </div>
+          <button id="btn-pause" class="icon-btn" aria-label="Pausa" data-action="pause">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <section id="screen-menu" class="screen" data-show="true" aria-label="Menú principal">
+        <div class="panel menu">
+          <div class="mascot" aria-hidden="true"><i></i><i></i></div>
+          <h1 class="logo"><span>ONE</span><span>BUTTON</span></h1>
+          <p class="menu-best">RÉCORD <b id="menu-best">0</b></p>
+          <div class="goal" aria-live="polite">
+            <div class="goal-text"><span id="goal-label">Próximo aspecto</span><b id="goal-num"></b></div>
+            <div class="goal-bar"><i id="goal-fill"></i></div>
+          </div>
+          <button class="btn btn-primary" data-action="play">Jugar</button>
+          <div class="btn-row">
+            <button class="btn btn-ghost" data-action="skins">Aspectos</button>
+            <button class="btn btn-ghost" data-action="settings">Ajustes</button>
+          </div>
+          <p class="hint">
+            <span class="hint-pc">Espacio · clic · ↑</span><span class="hint-touch">Tocá la pantalla</span><br />
+            Tocá para saltar · mantené para saltar más alto
+          </p>
+        </div>
+      </section>
+
+      <section id="screen-pause" class="screen" data-show="false" aria-label="Pausa">
+        <div class="panel">
+          <h2 class="title">Pausa</h2>
+          <button class="btn btn-primary" data-action="resume">Continuar</button>
+          <button class="btn btn-ghost" data-action="settings">Ajustes</button>
+          <button class="btn btn-ghost" data-action="menu">Menú principal</button>
+        </div>
+      </section>
+
+      <!-- Whole overlay is a retry target: tap anywhere to go again; only the menu button opts out. -->
+      <section id="screen-dead" class="screen" data-show="false" data-action="retry" aria-label="Fin de la partida">
+        <div class="panel">
+          <p id="dead-record" class="record-badge" hidden>¡Nuevo récord!</p>
+          <p id="dead-unlock" class="record-badge unlock-badge" hidden></p>
+          <p class="dead-label">Puntuación</p>
+          <p id="dead-score" class="dead-score">0</p>
+          <p class="dead-meta">Récord <b id="dead-best">0</b> · <i class="coin-dot"></i> <b id="dead-coins">0</b></p>
+          <p id="dead-next" class="dead-next"></p>
+          <button class="btn btn-primary btn-xl" data-action="retry">Reintentar</button>
+          <button class="btn btn-ghost" data-action="menu">Menú principal</button>
+        </div>
+      </section>
+
+      <section id="screen-skins" class="screen" data-show="false" aria-label="Aspectos">
+        <div class="panel panel-wide">
+          <h2 class="title">Aspectos</h2>
+          <p class="skins-sub">Se desbloquean llegando lejos en una sola partida.</p>
+          <div id="skin-grid" class="skin-grid"></div>
+          <button class="btn btn-ghost" data-action="back">Volver</button>
+        </div>
+      </section>
+
+      <section id="screen-settings" class="screen" data-show="false" aria-label="Ajustes">
+        <div class="panel">
+          <h2 class="title">Ajustes</h2>
+          <button class="toggle" role="switch" aria-checked="true" data-action="toggle-music"><span>Música</span><i></i></button>
+          <button class="toggle" role="switch" aria-checked="true" data-action="toggle-sfx"><span>Efectos</span><i></i></button>
+          <button class="btn btn-ghost" data-action="back">Volver</button>
+        </div>
+      </section>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+      <div id="countdown" class="countdown" aria-live="assertive"></div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
