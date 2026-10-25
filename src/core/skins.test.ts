@@ -74,7 +74,7 @@ describe('earning skins', () => {
   });
 
   it('everything is earned with big enough numbers, nothing without', () => {
-    const all = prog({ distance: 99999, coins: 99999, attempts: 99999, saws: 99999, crushers: 99999 });
+    const all = prog({ distance: 99999, coins: 99999, attempts: 99999, saws: 99999, crushers: 99999, levels: 99, discos: 999 });
     expect(newlyUnlocked(all, ['classic']).length).toBe(SKINS.length - 1);
     expect(newlyUnlocked(EMPTY_PROGRESS, ['classic'])).toEqual([]);
     expect(SKINS.every((s) => isEarned(s, all))).toBe(true);

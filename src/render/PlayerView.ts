@@ -491,6 +491,26 @@ export class PlayerView {
         ctx.arc(0, -h - s * 0.02, s * 0.035, 0, 6.283);
         ctx.fill();
         break;
+      case 'headphones': {
+        // Band over the head and two cups that thump on the beat of the clock.
+        const thump = 1 + 0.06 * Math.max(0, Math.sin(t * 8));
+        ctx.strokeStyle = '#1d1b2e';
+        ctx.lineWidth = 0.09 * s;
+        ctx.beginPath();
+        ctx.arc(0, -0.08 * s, 0.56 * s, Math.PI * 1.08, Math.PI * 1.92);
+        ctx.stroke();
+        for (const d of [-1, 1]) {
+          const cw = 0.2 * s * thump;
+          const ch = 0.36 * s * thump;
+          ctx.fillStyle = '#1d1b2e';
+          rr(ctx, d * 0.52 * s - cw / 2, -0.12 * s - ch / 2 + 0.1 * s, cw, ch, cw * 0.4);
+          ctx.fill();
+          ctx.fillStyle = accent;
+          rr(ctx, d * 0.52 * s - cw * 0.28, -0.12 * s - ch * 0.32 + 0.1 * s, cw * 0.56, ch * 0.64, cw * 0.25);
+          ctx.fill();
+        }
+        break;
+      }
       case 'catEars':
         for (const d of [-1, 1]) {
           ctx.fillStyle = this.color;

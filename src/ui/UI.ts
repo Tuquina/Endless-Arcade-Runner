@@ -1,14 +1,18 @@
 import type { Game } from '../core/Game';
-import { DIFFICULTY_INFO, GAME_MODES } from '../core/modes';
+import { DIFFICULTY_INFO, GAME_MODES, type GameMode } from '../core/modes';
+import { LEVELS, TIER_NAMES } from '../rhythm/levels';
+import { gradeOf, popcount } from '../rhythm/RhythmRun';
 import { DIFFICULTY_IDS, type DifficultyId } from '../world/Difficulty';
 import { GOAL_UNIT, SKINS, goalText, type Skin } from '../core/skins';
 import { SkinPreview } from './SkinPreview';
 import './ui.css';
 
-type ScreenName = 'menu' | 'pause' | 'dead' | 'settings' | 'skins';
+type ScreenName = 'menu' | 'pause' | 'dead' | 'settings' | 'skins' | 'levels' | 'rdead' | 'complete';
 
 /** Delay before the game-over screen appears, so the death itself is visible first. */
 const DEAD_SCREEN_DELAY_MS = 450;
+/** The results of a finished level wait for the confetti a moment longer. */
+const COMPLETE_SCREEN_DELAY_MS = 900;
 /** Seconds per number of the resume countdown (must match Game's RESUME_COUNTDOWN / 3). */
 const COUNT_STEP = 0.6;
 
@@ -29,7 +33,13 @@ export class UI {
     dead: el('screen-dead'),
     settings: el('screen-settings'),
     skins: el('screen-skins'),
+    levels: el('screen-levels'),
+    rdead: el('screen-rdead'),
+    complete: el('screen-complete'),
   };
+  private levelsOpen = false;
+  private lastPct = -1;
+  private lastCombo = -1;
   private readonly toast = el('toast');
   private toastTimer = 0;
   private skinsOpen = false;
@@ -69,6 +79,7 @@ export class UI {
     game.onUnlock = (skin) => this.showToast(skin);
     this.buildSkins();
     this.buildModes();
+    this.buildLevels();
     this.menuPreview = new SkinPreview(el<HTMLCanvasElement>('menu-skin'), game.skin);
     this.goalPreview = new SkinPreview(el<HTMLCanvasElement>('hud-goal-skin'), game.skin);
     this.refreshToggles();
@@ -80,19 +91,27 @@ export class UI {
     const g = this.game;
     window.clearTimeout(this.deadTimer);
     this.deadVisible = false;
-    if (g.state === 'dead') {
+    if (g.state === 'dead' || g.state === 'complete') {
+      const state = g.state;
       this.deadTimer = window.setTimeout(() => {
-        if (g.state !== 'dead') return;
-        this.fillDead();
+        if (g.state !== state) return;
+        if (state === 'complete') this.fillComplete();
+        else if (g.mode === 'rhythm') this.fillRDead();
+        else this.fillDead();
         this.deadVisible = true;
         this.applyScreen();
-      }, DEAD_SCREEN_DELAY_MS);
+      }, state === 'complete' ? COMPLETE_SCREEN_DELAY_MS : DEAD_SCREEN_DELAY_MS);
     }
     if (g.state === 'menu') {
       el('menu-best').textContent = String(g.best);
       this.refreshModes();
       this.refreshGoal();
+      if (this.levelsOpen) this.refreshLevels();
     }
+    if (g.state !== 'menu') this.levelsOpen = false;
+    this.hud.dataset.mode = g.mode;
+    el('hud-practice').hidden = !g.rhythm.practice;
+    el('hud-track-name').textContent = g.mode === 'rhythm' ? LEVELS[g.rhythm.index]!.name : '';
     this.hud.dataset.show = String(g.state !== 'menu' && g.state !== 'dead');
     this.applyScreen();
   }
@@ -104,20 +123,27 @@ export class UI {
       case 'paused':
         return 'pause';
       case 'dead':
-        return this.deadVisible ? 'dead' : null;
+        return this.deadVisible ? (this.game.mode === 'rhythm' ? 'rdead' : 'dead') : null;
+      case 'complete':
+        return this.deadVisible ? 'complete' : null;
       default:
         return null;
     }
   }
 
   private applyScreen(): void {
-    const active: ScreenName | null = this.settingsOpen ? 'settings' : this.skinsOpen ? 'skins' : this.baseScreen();
+    const active: ScreenName | null = this.settingsOpen
+      ? 'settings'
+      : this.skinsOpen
+        ? 'skins'
+        : this.levelsOpen && this.game.state === 'menu'
+          ? 'levels'
+          : this.baseScreen();
     for (const name of Object.keys(this.screens) as ScreenName[]) {
       this.screens[name].dataset.show = String(name === active);
     }
-    this.hud.dataset.show = String(
-      !this.settingsOpen && !this.skinsOpen && this.game.state !== 'menu' && this.game.state !== 'dead',
-    );
+    const st = this.game.state;
+    this.hud.dataset.show = String(!this.settingsOpen && !this.skinsOpen && st !== 'menu' && st !== 'dead' && st !== 'complete');
     this.updatePreviewLoop(active);
   }
 
@@ -166,7 +192,100 @@ export class UI {
       : '';
   }
 
-  /** Menu progress bar towards the skin that is closest to being earned. */
+  private fillRDead(): void {
+    const g = this.game;
+    const rec = g.levelRecord(g.rhythm.index);
+    el('rdead-name').textContent = LEVELS[g.rhythm.index]!.name;
+    el('rdead-pct').textContent = `${g.rhythmProgress}%`;
+    el('rdead-fill').style.width = `${g.rhythmProgress}%`;
+    el('rdead-best').textContent = `${rec.best}%`;
+    el('rdead-attempt').textContent = String(rec.attempts);
+    el('rdead-best-badge').hidden = !g.rhythmNewBest;
+    el('rdead-tip').textContent =
+      rec.attempts >= 8 && !rec.done && !g.save.data.practice ? 'Probá el modo Práctica en Niveles: reaparecés en puntos de control.' : 'Escuchá el bombo: los saltos caen en la música.';
+  }
+
+  private fillComplete(): void {
+    const g = this.game;
+    const r = g.rhythm;
+    const rec = g.levelRecord(r.index);
+    const practice = r.practice;
+    el('complete-title').textContent = practice ? '¡Práctica completada!' : '¡Nivel completado!';
+    const acc = r.accuracy;
+    el('complete-grade').textContent = practice ? '✓' : gradeOf(acc);
+    el('complete-grade').dataset.grade = practice ? 'P' : gradeOf(acc);
+    el('complete-acc').textContent = `${acc}%`;
+    const c = r.counts;
+    el('complete-counts').textContent = `${c.perfect} perfectos · ${c.good} bien · ${c.ok} ok${c.miss ? ` · ${c.miss} sin tocar` : ''}`;
+    const discos = el('complete-discos');
+    discos.replaceChildren();
+    for (let i = 0; i < 3; i++) {
+      const d = document.createElement('i');
+      d.className = 'disco-dot big';
+      const now = (r.discoMask >> i) & 1;
+      const before = (rec.discos >> i) & 1;
+      d.dataset.state = now ? 'new' : before && !practice ? 'old' : 'none';
+      discos.append(d);
+    }
+    discos.append(document.createTextNode(practice ? ' Los discos y récords solo cuentan fuera de práctica.' : ` ${popcount(rec.discos)}/3 discos`));
+    const next = r.index + 1;
+    const hasNext = next < LEVELS.length && g.isLevelUnlocked(next);
+    const btn = el('btn-next-level');
+    btn.hidden = practice || !hasNext;
+    el('complete-next-note').textContent = practice
+      ? 'Ahora intentalo sin puntos de control para completarlo de verdad.'
+      : next >= LEVELS.length
+        ? '¡Completaste toda la gira!'
+        : `Desbloqueado: ${LEVELS[next]!.name}`;
+    const badge = el('complete-unlock');
+    badge.hidden = g.unlockedNow.length === 0;
+    badge.textContent = `¡Aspecto desbloqueado: ${g.unlockedNow.map((s) => s.name).join(', ')}!`;
+  }
+
+  /** Rhythm level cards are created once; `refreshLevels` updates them. */
+  private buildLevels(): void {
+    const list = el('level-list');
+    LEVELS.forEach((lv, i) => {
+      const card = document.createElement('button');
+      card.className = 'level-card';
+      card.dataset.action = 'play-level';
+      card.dataset.level = String(i);
+      card.innerHTML =
+        `<span class="level-num">${i + 1}</span>` +
+        `<span class="level-main"><b class="level-name">${lv.name}</b><small class="level-meta">${lv.song.bpm} BPM · ${TIER_NAMES[lv.tier]} · ${lv.blurb}</small>` +
+        `<i class="level-bar"><b></b></i></span>` +
+        `<span class="level-side"><b class="level-pct"></b><span class="level-discos"></span></span>`;
+      card.dataset.tier = String(lv.tier);
+      list.append(card);
+    });
+  }
+
+  private refreshLevels(): void {
+    const g = this.game;
+    this.root.querySelector('[data-action="toggle-practice"]')?.setAttribute('aria-checked', String(g.save.data.practice));
+    for (const card of el('level-list').children as HTMLCollectionOf<HTMLElement>) {
+      const i = Number(card.dataset.level);
+      const rec = g.levelRecord(i);
+      const open = g.isLevelUnlocked(i);
+      card.dataset.locked = String(!open);
+      card.dataset.done = String(rec.done);
+      card.querySelector<HTMLElement>('.level-bar b')!.style.width = `${rec.best}%`;
+      card.querySelector<HTMLElement>('.level-pct')!.textContent = !open ? '🔒' : rec.done ? gradeOf(rec.acc) : `${rec.best}%`;
+      const d = card.querySelector<HTMLElement>('.level-discos')!;
+      d.replaceChildren();
+      for (let k = 0; k < 3; k++) {
+        const dot = document.createElement('i');
+        dot.className = 'disco-dot';
+        dot.dataset.state = (rec.discos >> k) & 1 ? 'old' : 'none';
+        d.append(dot);
+      }
+      card.setAttribute(
+        'aria-label',
+        open ? `Nivel ${i + 1}, ${LEVELS[i]!.name}: ${rec.done ? 'completado' : `${rec.best}%`}` : `Nivel ${i + 1} bloqueado: completá el anterior`,
+      );
+    }
+  }
+
   /** Game-mode chips (the unavailable ones are shown but disabled) and the difficulty selector. */
   private buildModes(): void {
     const row = el('mode-row');
@@ -198,6 +317,10 @@ export class UI {
     for (const b of el('mode-row').querySelectorAll<HTMLElement>('.mode-chip')) {
       b.setAttribute('aria-pressed', String(b.dataset.mode === g.mode));
     }
+    const rhythm = g.mode === 'rhythm';
+    this.screens.menu.dataset.mode = g.mode;
+    el('play-label').textContent = rhythm ? 'Elegir nivel' : 'Jugar';
+    el('menu-rhythm').textContent = rhythm ? `Niveles ${g.levelsDone}/${LEVELS.length} · Discos ${g.discosTotal}/${LEVELS.length * 3}` : '';
     for (const b of el('diff-row').querySelectorAll<HTMLElement>('.seg-btn')) {
       b.setAttribute('aria-checked', String(b.dataset.difficulty === g.difficultyId));
     }
@@ -299,6 +422,19 @@ export class UI {
     if (g.coins !== this.lastCoins) {
       this.lastCoins = g.coins;
       this.hudCoins.textContent = String(g.coins);
+      el('hud-discos').textContent = String(g.coins);
+    }
+    if (g.mode === 'rhythm') {
+      if (g.rhythmProgress !== this.lastPct) {
+        this.lastPct = g.rhythmProgress;
+        el('hud-pct').textContent = `${g.rhythmProgress}%`;
+        el('hud-progress-fill').style.width = `${g.rhythmProgress}%`;
+      }
+      const combo = g.rhythm.combo;
+      if (combo !== this.lastCombo) {
+        this.lastCombo = combo;
+        el('hud-combo').textContent = combo >= 4 ? `COMBO ×${combo}` : '';
+      }
     }
     if (g.level !== this.lastLevel) {
       this.lastLevel = g.level;
@@ -352,6 +488,7 @@ export class UI {
       .querySelector('[data-action="toggle-music"]')
       ?.setAttribute('aria-checked', String(d.music));
     this.root.querySelector('[data-action="toggle-sfx"]')?.setAttribute('aria-checked', String(d.sfx));
+    el('latency-val').textContent = `${d.latency > 0 ? '+' : ''}${d.latency} ms`;
   }
 
   /** Retry fires on pointerdown (not click) so game over → running again feels instant. */
@@ -372,7 +509,43 @@ export class UI {
     g.audio.sfx('click');
     switch (target.dataset.action) {
       case 'play':
+        if (g.mode === 'rhythm') {
+          this.levelsOpen = true;
+          this.refreshLevels();
+          this.applyScreen();
+        } else {
+          g.play();
+        }
+        break;
+      case 'select-mode':
+        g.setMode((target.dataset.mode ?? 'endless') as GameMode);
+        break;
+      case 'play-level':
+        if (g.isLevelUnlocked(Number(target.dataset.level))) {
+          this.levelsOpen = false;
+          g.playLevel(Number(target.dataset.level));
+        }
+        break;
+      case 'toggle-practice':
+        g.setPractice(!g.save.data.practice);
+        this.refreshLevels();
+        break;
+      case 'next-level':
+        g.nextLevel();
+        break;
+      case 'replay':
         g.play();
+        break;
+      case 'levels':
+        g.toMenu();
+        this.levelsOpen = true;
+        this.refreshLevels();
+        this.applyScreen();
+        break;
+      case 'latency-minus':
+      case 'latency-plus':
+        g.setLatency(g.save.data.latency + (target.dataset.action === 'latency-plus' ? 10 : -10));
+        this.refreshToggles();
         break;
       case 'pause':
         g.pause();
@@ -393,8 +566,9 @@ export class UI {
         this.applyScreen();
         break;
       case 'back':
-        this.settingsOpen = false;
-        this.skinsOpen = false;
+        if (this.settingsOpen) this.settingsOpen = false;
+        else if (this.skinsOpen) this.skinsOpen = false;
+        else this.levelsOpen = false;
         this.applyScreen();
         break;
       case 'select-difficulty':
@@ -424,9 +598,10 @@ export class UI {
 
   private onKey = (e: KeyboardEvent): void => {
     if (e.code !== 'Escape' && e.code !== 'KeyP') return;
-    if (this.settingsOpen || this.skinsOpen) {
-      this.settingsOpen = false;
-      this.skinsOpen = false;
+    if (this.settingsOpen || this.skinsOpen || (this.levelsOpen && this.game.state === 'menu')) {
+      if (this.settingsOpen) this.settingsOpen = false;
+      else if (this.skinsOpen) this.skinsOpen = false;
+      else this.levelsOpen = false;
       this.applyScreen();
     } else {
       this.game.togglePause();

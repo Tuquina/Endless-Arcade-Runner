@@ -1,7 +1,11 @@
 export const SOLID = 0;
 export const HAZARD = 1;
 export const COIN = 2;
-export type RectKind = typeof SOLID | typeof HAZARD | typeof COIN;
+/** Rhythm mode only: a launch pad on the floor (touching it bounces the runner high, no press needed). */
+export const PAD = 3;
+/** Rhythm mode only: a ring in the air; pressing while touching it jumps again in mid-air. */
+export const RING = 4;
+export type RectKind = typeof SOLID | typeof HAZARD | typeof COIN | typeof PAD | typeof RING;
 
 /** Motion profiles of a mover, as a function of u ∈ [0, 1) (position inside one wavelength). */
 export const WAVE_SINE = 0;

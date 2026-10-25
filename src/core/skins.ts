@@ -7,7 +7,7 @@
  */
 
 /** What the player has to do to earn a skin. */
-export type GoalType = 'distance' | 'coins' | 'attempts' | 'saws' | 'crushers';
+export type GoalType = 'distance' | 'coins' | 'attempts' | 'saws' | 'crushers' | 'levels' | 'discos';
 
 export interface Goal {
   type: GoalType;
@@ -29,7 +29,8 @@ export type Accessory =
   | 'beard'
   | 'flame'
   | 'crystals'
-  | 'frogEyes';
+  | 'frogEyes'
+  | 'headphones';
 /** Whole-body effects drawn on top of the plain shape. */
 export type Aura = 'ghost' | 'glitch' | 'sparkle';
 /** Motion of the particles a skin leaves behind. */
@@ -133,6 +134,22 @@ export const SKINS: readonly Skin[] = [
     color: '#aef0ff', shade: '#67c7e8', accent: '#ffffff', pattern: 'facets', aura: 'sparkle', mouth: 'smile',
     trail: { kind: 'star', colors: ['#ffffff', '#9cf0ff', '#d9c9ff'] },
   },
+  // Rhythm mode rewards.
+  {
+    id: 'dj', name: 'DJ', blurb: 'Pone el ritmo y nunca pierde el compás.', goal: { type: 'levels', n: 2 },
+    color: '#ff3d81', shade: '#b8195a', accent: '#35e0ff', accessories: ['headphones', 'shades'], mouth: 'grin',
+    trail: { kind: 'pixel', colors: ['#ff3d81', '#35e0ff', '#ffffff'], ground: true },
+  },
+  {
+    id: 'discoball', name: 'Bola disco', blurb: 'Brilla con cada beat.', goal: { type: 'discos', n: 12 },
+    color: '#dfe6f2', shade: '#9aa6bb', accent: '#ffffff', pattern: 'facets', aura: 'sparkle', mouth: 'smile',
+    trail: { kind: 'star', colors: ['#ff3d81', '#35e0ff', '#ffd23f', '#9cff6b'] },
+  },
+  {
+    id: 'maestro', name: 'Maestro', blurb: 'Terminó toda la gira sin perder un beat.', goal: { type: 'levels', n: 8 },
+    color: '#ffd23f', shade: '#c79a12', accent: '#8a5cff', accessories: ['headphones', 'crown'], aura: 'sparkle', mouth: 'grin',
+    trail: { kind: 'star', colors: ['#ffd23f', '#ffffff', '#c9b3ff'], ground: true },
+  },
 ];
 
 /** Everything an objective can be measured against. */
@@ -144,9 +161,12 @@ export interface Progress {
   attempts: number;
   saws: number;
   crushers: number;
+  /** Rhythm levels completed, and discos collected in completed runs. */
+  levels: number;
+  discos: number;
 }
 
-export const EMPTY_PROGRESS: Progress = { distance: 0, coins: 0, attempts: 0, saws: 0, crushers: 0 };
+export const EMPTY_PROGRESS: Progress = { distance: 0, coins: 0, attempts: 0, saws: 0, crushers: 0, levels: 0, discos: 0 };
 
 /** Current value of the quantity a goal measures. */
 export function goalValue(goal: Goal, p: Progress): number {
@@ -156,6 +176,8 @@ export function goalValue(goal: Goal, p: Progress): number {
     case 'attempts': return p.attempts;
     case 'saws': return p.saws;
     case 'crushers': return p.crushers;
+    case 'levels': return p.levels;
+    case 'discos': return p.discos;
   }
 }
 
@@ -165,6 +187,8 @@ export const GOAL_UNIT: Record<GoalType, string> = {
   attempts: 'partidas',
   saws: 'sierras',
   crushers: 'prensas',
+  levels: 'niveles',
+  discos: 'discos',
 };
 
 /** Short objective, e.g. "Llegá a 750 m" / "Juntá 100 monedas". */
@@ -175,6 +199,8 @@ export function goalText(goal: Goal): string {
     case 'attempts': return `Jugá ${goal.n} partidas`;
     case 'saws': return `Esquivá ${goal.n} sierras`;
     case 'crushers': return `Pasá ${goal.n} prensas`;
+    case 'levels': return `Completá ${goal.n} niveles de Ritmo`;
+    case 'discos': return `Juntá ${goal.n} discos en Ritmo`;
   }
 }
 

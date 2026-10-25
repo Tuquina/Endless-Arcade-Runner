@@ -37,6 +37,10 @@ export const DEATH_Y = -4;
 export const SPIKE_HIT_INSET = 0.28;
 export const SPIKE_HIT_HEIGHT = 0.5;
 
+/** Rhythm mode: upward speed given by a launch pad (≈ 3 tiles high), and by a mid-air ring. */
+export const PAD_VELOCITY = 19.5;
+export const RING_VELOCITY = 14;
+
 /** Horizontal speed (tiles/s) at difficulty 0 and 1. */
 export const SPEED_MIN = 7;
 export const SPEED_MAX = 13;

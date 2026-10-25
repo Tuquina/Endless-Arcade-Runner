@@ -9,6 +9,18 @@ export interface BestRecord {
   bestDist: number;
 }
 
+/** Rhythm-mode progress for one level. */
+export interface LevelRecord {
+  /** Best progress in a normal (non-practice) attempt, 0..100. */
+  best: number;
+  done: boolean;
+  /** Best accuracy (0..100) among completed runs. */
+  acc: number;
+  /** Bitmask of the discos collected in completed runs. */
+  discos: number;
+  attempts: number;
+}
+
 /** Persistent player data. Bump `v` and extend `migrate` when the shape changes. */
 export interface SaveData {
   v: 1;
@@ -18,6 +30,11 @@ export interface SaveData {
   mode: GameMode;
   difficulty: DifficultyId;
   attempts: number;
+  /** Rhythm mode: progress per level id, last chosen level, practice switch, audio calibration (ms). */
+  rhythm: { [id: string]: LevelRecord };
+  rhythmLevel: number;
+  practice: boolean;
+  latency: number;
   /** Lifetime coins. */
   coins: number;
   /** Audio switches (applied by the audio system). */
@@ -43,7 +60,7 @@ export interface StorageLike {
 
 const emptyRecords = (): SaveData['records'] => ({ easy: { best: 0, bestDist: 0 }, normal: { best: 0, bestDist: 0 }, hard: { best: 0, bestDist: 0 } });
 
-const defaults = (): SaveData => ({ v: 1, records: emptyRecords(), mode: DEFAULT_MODE, difficulty: DEFAULT_DIFFICULTY, attempts: 0, coins: 0, music: true, sfx: true, maxDist: 0, saws: 0, crushers: 0, skin: 'classic', unlocked: ['classic'] });
+const defaults = (): SaveData => ({ v: 1, records: emptyRecords(), mode: DEFAULT_MODE, difficulty: DEFAULT_DIFFICULTY, attempts: 0, rhythm: {}, rhythmLevel: 0, practice: false, latency: 0, coins: 0, music: true, sfx: true, maxDist: 0, saws: 0, crushers: 0, skin: 'classic', unlocked: ['classic'] });
 
 /** Non-negative finite integer, else the fallback. Guards against hand-edited or corrupt storage. */
 function count(value: unknown, fallback: number): number {
@@ -66,6 +83,22 @@ function migrate(raw: unknown): SaveData {
       }
     }
     if (isGameMode(o.mode)) out.mode = o.mode;
+    if (typeof o.rhythm === 'object' && o.rhythm !== null) {
+      for (const [id, v] of Object.entries(o.rhythm as { [k: string]: unknown }).slice(0, 64)) {
+        if (id.length > 32 || typeof v !== 'object' || v === null) continue;
+        const r = v as { [k: string]: unknown };
+        out.rhythm[id] = {
+          best: Math.min(100, count(r.best, 0)),
+          done: r.done === true,
+          acc: Math.min(100, count(r.acc, 0)),
+          discos: count(r.discos, 0) & 0xff,
+          attempts: count(r.attempts, 0),
+        };
+      }
+    }
+    out.rhythmLevel = Math.min(63, count(o.rhythmLevel, 0));
+    out.practice = o.practice === true;
+    if (typeof o.latency === 'number' && Number.isFinite(o.latency)) out.latency = Math.max(-250, Math.min(250, Math.round(o.latency)));
     if (isDifficultyId(o.difficulty)) out.difficulty = o.difficulty;
     out.attempts = count(o.attempts, 0);
     out.coins = count(o.coins, 0);
@@ -131,6 +164,12 @@ export class Save {
         d.saws = Math.max(d.saws, other.saws);
         d.crushers = Math.max(d.crushers, other.crushers);
         d.unlocked = [...new Set([...d.unlocked, ...other.unlocked])];
+        for (const [id, o] of Object.entries(other.rhythm)) {
+          const m = d.rhythm[id];
+          d.rhythm[id] = m
+            ? { best: Math.max(m.best, o.best), done: m.done || o.done, acc: Math.max(m.acc, o.acc), discos: m.discos | o.discos, attempts: Math.max(m.attempts, o.attempts) }
+            : { ...o };
+        }
       }
     } catch {
       /* unreadable storage: just overwrite below */

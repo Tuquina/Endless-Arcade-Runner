@@ -1,8 +1,10 @@
 import { Input } from '../input/Input';
 import { Player } from '../physics/Player';
-import { Save, type BestRecord } from '../storage/Save';
+import { Save, type BestRecord, type LevelRecord } from '../storage/Save';
 import { DIFFICULTIES, difficultyAt, speedAt, type DifficultyId, type DifficultyProfile } from '../world/Difficulty';
-import { DEFAULT_MODE, type GameMode } from './modes';
+import { type GameMode } from './modes';
+import { RhythmRun, popcount, type Judgement } from '../rhythm/RhythmRun';
+import { LEVELS } from '../rhythm/levels';
 import { Generator } from '../world/Generator';
 import { COIN } from '../world/Rect';
 import { World } from '../world/World';
@@ -13,7 +15,7 @@ import { AudioSystem } from '../audio/AudioSystem';
 import { Particles } from '../render/Particles';
 import { PlayerView } from '../render/PlayerView';
 
-export type GameState = 'menu' | 'playing' | 'paused' | 'countdown' | 'dead';
+export type GameState = 'menu' | 'playing' | 'paused' | 'countdown' | 'dead' | 'complete';
 
 /** How far ahead of the player geometry is generated, and how far behind it is kept (tiles). */
 const GEN_AHEAD = 60;
@@ -26,6 +28,10 @@ const RESUME_COUNTDOWN = 1.8;
 export const COIN_VALUE = 10;
 /** Difficulty is shown to the player as a level from 1 to this value. */
 export const MAX_LEVEL = 10;
+/** Practice mode: pause between dying and reappearing at the last checkpoint. */
+const RESPAWN_DELAY = 0.7;
+/** After finishing a rhythm level, the runner keeps going this far past the finish line. */
+const VICTORY_LAP = 40;
 
 /** Owns the simulation and wires input → physics → world → renderer. */
 export class Game {
@@ -34,6 +40,11 @@ export class Game {
   readonly world = new World(256);
   readonly save = new Save();
   readonly audio = new AudioSystem(() => this.save.data);
+  /** Rhythm mode: the level being played and everything about the current attempt. */
+  readonly rhythm = new RhythmRun();
+  /** Rhythm mode: progress (%) of the last attempt, and whether it beat the best. */
+  rhythmProgress = 0;
+  rhythmNewBest = false;
   difficulty = 0;
   /** Metres travelled this run (floor of x). */
   distance = 0;
@@ -103,6 +114,7 @@ export class Game {
     this.loop = new Loop(
       (dt) => this.update(dt),
       (alpha, frameDt) => {
+        this.syncClock();
         this.fps += (1 / Math.max(frameDt, 1e-4) - this.fps) * 0.05;
         this.renderer.render(this, alpha, frameDt, this.fps);
         this.onFrame?.();
@@ -113,14 +125,112 @@ export class Game {
     // Never lose a run to a notification or tab switch.
     document.addEventListener('visibilitychange', () => document.hidden && this.pause());
     window.addEventListener('blur', () => this.pause());
+    this.audio.latencyMs = this.save.data.latency;
     this.reconcileSkins();
     this.resetRun();
     this.audio.setMusicMode('on'); // takes effect after the first user gesture
   }
 
-  /** Selected game mode (only Endless exists so far) and endless difficulty. */
+  /** Selected game mode and endless difficulty. */
   get mode(): GameMode {
-    return DEFAULT_MODE;
+    return this.save.data.mode;
+  }
+
+  /** Menu action: switch between the endless runner and the rhythm campaign. */
+  setMode(mode: GameMode): void {
+    if (this.state !== 'menu' || mode === this.save.data.mode) return;
+    this.save.data.mode = mode;
+    this.save.flush();
+    this.resetRun();
+    this.refreshGoalTarget();
+    this.onState?.();
+  }
+
+  /** Metres only count for distance skins in the endless mode, and not in Easy. */
+  private get countsDistance(): boolean {
+    return this.mode === 'endless' && this.profile.countsForSkins;
+  }
+
+  // ---------------------------------------------------------------- rhythm campaign
+
+  levelRecord(i: number): LevelRecord {
+    const id = LEVELS[i]!.id;
+    return (this.save.data.rhythm[id] ??= { best: 0, done: false, acc: 0, discos: 0, attempts: 0 });
+  }
+
+  /** The first level is always open; each further level opens when the previous one is completed. */
+  isLevelUnlocked(i: number): boolean {
+    return i === 0 || (i < LEVELS.length && this.levelRecord(i - 1).done);
+  }
+
+  get levelsDone(): number {
+    return LEVELS.reduce((n, _, i) => n + (this.levelRecord(i).done ? 1 : 0), 0);
+  }
+
+  get discosTotal(): number {
+    return LEVELS.reduce((n, _, i) => n + popcount(this.levelRecord(i).discos), 0);
+  }
+
+  setPractice(on: boolean): void {
+    this.save.data.practice = on;
+    this.save.flush();
+  }
+
+  setLatency(ms: number): void {
+    this.save.data.latency = Math.max(-250, Math.min(250, Math.round(ms)));
+    this.audio.latencyMs = this.save.data.latency;
+    this.save.flush();
+  }
+
+  /** Start (or restart) rhythm level `i`. */
+  playLevel(i: number): void {
+    if (!this.isLevelUnlocked(i) || (this.state !== 'menu' && this.state !== 'dead' && this.state !== 'complete')) return;
+    this.save.data.mode = 'rhythm';
+    this.save.data.rhythmLevel = i;
+    this.resetRun();
+    this.beginRun();
+  }
+
+  nextLevel(): void {
+    const i = this.rhythm.index + 1;
+    if (i < LEVELS.length && this.isLevelUnlocked(i)) this.playLevel(i);
+  }
+
+  /** Song time the run is at, and whether a practice respawn is pending (for the renderer). */
+  get inRhythm(): boolean {
+    return this.mode === 'rhythm' && this.rhythm.level !== null;
+  }
+
+  private startSong(): void {
+    const r = this.rhythm;
+    this.audio.playSong(r.level!.song, r.songTime);
+    r.waiting = true;
+    r.waitSince = performance.now();
+  }
+
+  /**
+   * Keep the simulation locked to the music the player hears: hold still until the song reaches the
+   * run's clock (start, resume, respawn), then nudge the fixed-step loop so neither drifts.
+   */
+  private syncClock(): void {
+    if (this.mode !== 'rhythm' || this.state !== 'playing') return;
+    const r = this.rhythm;
+    if (r.respawnT > 0) return;
+    const heard = this.audio.songTime();
+    if (heard === null) {
+      // No audio clock (blocked or muted device): run on the frame clock.
+      if (r.waiting && performance.now() - r.waitSince > 300) r.waiting = false;
+      return;
+    }
+    const d = heard - r.songTime;
+    if (r.waiting) {
+      if (d >= 0) {
+        r.waiting = false;
+        this.loop.shift(Math.min(d, 0.05));
+      }
+      return;
+    }
+    if (Math.abs(d) > 0.002) this.loop.shift(Math.max(-0.03, Math.min(0.03, d * 0.5)));
   }
 
   get difficultyId(): DifficultyId {
@@ -186,14 +296,14 @@ export class Game {
   /** Saved totals: best single run for distance, lifetime for everything else. */
   private savedProgress(): Progress {
     const d = this.save.data;
-    return { distance: d.maxDist, coins: d.coins, attempts: d.attempts, saws: d.saws, crushers: d.crushers };
+    return { distance: d.maxDist, coins: d.coins, attempts: d.attempts, saws: d.saws, crushers: d.crushers, levels: this.levelsDone, discos: this.discosTotal };
   }
 
   /** Pick the skin for the HUD progress pill (called when a run starts and whenever one is unlocked). */
   private refreshGoalTarget(): void {
     const unlocked = this.save.data.unlocked;
     // Where metres do not count, distance skins are not candidates for the pill.
-    const skip = this.profile.countsForSkins ? unlocked : unlocked.concat(SKINS.filter((s) => s.goal.type === 'distance').map((s) => s.id));
+    const skip = this.countsDistance ? unlocked : unlocked.concat(SKINS.filter((s) => s.goal.type === 'distance').map((s) => s.id));
     this.goalTarget = nextSkin(skip, this.liveProgress());
   }
 
@@ -203,11 +313,13 @@ export class Game {
     if (!t) return 0;
     const d = this.save.data;
     switch (t.goal.type) {
-      case 'distance': return this.profile.countsForSkins ? this.distance : 0;
+      case 'distance': return this.countsDistance ? this.distance : 0;
       case 'coins': return d.coins + this.coins;
       case 'attempts': return d.attempts;
       case 'saws': return d.saws + this.saws;
       case 'crushers': return d.crushers + this.crushers;
+      case 'levels': return this.levelsDone;
+      case 'discos': return this.discosTotal;
     }
   }
 
@@ -215,11 +327,13 @@ export class Game {
   private liveProgress(): Progress {
     const d = this.save.data;
     return {
-      distance: this.profile.countsForSkins ? this.distance : 0,
-      coins: d.coins + this.coins,
+      distance: this.countsDistance ? this.distance : 0,
+      coins: d.coins + (this.mode === 'endless' ? this.coins : 0),
       attempts: d.attempts,
       saws: d.saws + this.saws,
       crushers: d.crushers + this.crushers,
+      levels: this.levelsDone,
+      discos: this.discosTotal,
     };
   }
 
@@ -281,6 +395,24 @@ export class Game {
 
   /** Build a fresh layout and put the player at the start, waiting for the first press. */
   private resetRun(): void {
+    this.audio.stopSong();
+    if (this.mode === 'rhythm') {
+      const lv = this.rhythm.load(this.save.data.rhythmLevel);
+      this.rhythm.practice = this.save.data.practice;
+      this.rhythm.begin(this.world, this.player, null);
+      this.player.speed = lv.speed;
+      this.difficulty = 0;
+      this.distance = this.coins = this.score = 0;
+      this.saws = this.crushers = 0;
+      this.deadTime = 0;
+      this.newRecord = false;
+      this.rhythmProgress = 0;
+      this.rhythmNewBest = false;
+      this.fx.clear();
+      this.view.reset();
+      this.shake = this.flash = 0;
+      return;
+    }
     this.generator.reset(this.seedCounter++, this.startAt, this.profile);
     this.generator.ensureAhead(this.startAt + GEN_AHEAD);
     this.player.reset(this.startAt);
@@ -298,13 +430,24 @@ export class Game {
 
   private setState(next: GameState): void {
     this.state = next;
-    this.audio.setMusicMode(next === 'dead' ? 'off' : next === 'paused' ? 'duck' : 'on');
+    // The chiptune loop belongs to the endless runner and the menus; rhythm levels bring their own song.
+    const rhythmRun = this.mode === 'rhythm' && next !== 'menu';
+    this.audio.setMusicMode(next === 'dead' || rhythmRun ? 'off' : next === 'paused' ? 'duck' : 'on');
+    if (next === 'paused' || next === 'menu') this.audio.stopSong();
     this.onState?.();
   }
 
   private beginRun(): void {
-    this.bestAtStart = this.record.best;
     this.unlockedNow.length = 0;
+    if (this.mode === 'rhythm') {
+      if (!this.rhythm.practice) this.levelRecord(this.rhythm.index).attempts++;
+      this.save.flush();
+      this.setState('playing');
+      this.startSong();
+      this.refreshGoalTarget();
+      return;
+    }
+    this.bestAtStart = this.record.best;
     this.save.data.attempts++;
     this.setState('playing');
     this.checkUnlocks(); // "play N games" objectives
@@ -313,7 +456,7 @@ export class Game {
 
   /** Start a new run right away (from the menu or after dying). */
   play(): void {
-    if (this.state !== 'menu' && this.state !== 'dead') return;
+    if (this.state !== 'menu' && this.state !== 'dead' && this.state !== 'complete') return;
     this.resetRun();
     this.beginRun();
   }
@@ -330,7 +473,7 @@ export class Game {
 
   /** Tap on the game-over screen: same guard as the in-canvas retry. */
   retry(): void {
-    if (this.state === 'dead' && this.deadTime > RETRY_DELAY) this.play();
+    if ((this.state === 'dead' || this.state === 'complete') && this.deadTime > RETRY_DELAY) this.play();
   }
 
   togglePause(): void {
@@ -340,7 +483,7 @@ export class Game {
 
   /** Back to the main menu; an abandoned run still banks its coins and score. */
   toMenu(): void {
-    if (this.state === 'paused' || this.state === 'countdown') this.commitRun();
+    if ((this.state === 'paused' || this.state === 'countdown') && this.mode === 'endless') this.commitRun();
     this.resetRun();
     this.setState('menu');
   }
@@ -353,7 +496,10 @@ export class Game {
       // Visuals freeze with the game; only the countdown advances.
       if (this.state === 'countdown') {
         this.countdown -= dt;
-        if (this.countdown <= 0) this.setState('playing');
+        if (this.countdown <= 0) {
+          this.setState('playing');
+          if (this.mode === 'rhythm') this.startSong();
+        }
       }
       return;
     }
@@ -366,12 +512,22 @@ export class Game {
     this.view.update(dt, this.player.grounded, this.player.vy);
 
     if (this.state === 'menu') {
-      if (pressed) this.play();
+      // In rhythm mode a level is picked from the level list, not by tapping the menu.
+      if (pressed && this.mode === 'endless') this.play();
       return;
     }
     if (this.state === 'dead') {
       this.deadTime += dt;
       if (pressed && this.deadTime > RETRY_DELAY) this.play();
+      return;
+    }
+    if (this.state === 'complete') {
+      this.deadTime += dt;
+      this.victoryLap(dt);
+      return;
+    }
+    if (this.mode === 'rhythm') {
+      this.rhythmStep(dt, pressed, held);
       return;
     }
 
@@ -391,6 +547,76 @@ export class Game {
     if (p.dead) this.die();
   }
 
+  /** One fixed step of a rhythm level. */
+  private rhythmStep(dt: number, pressed: boolean, held: boolean): void {
+    const r = this.rhythm;
+    const lv = r.level!;
+    const p = this.player;
+    if (r.respawnT > 0) {
+      r.respawnT -= dt;
+      if (r.respawnT <= 0) this.respawn();
+      return;
+    }
+    if (r.waiting) return;
+    // Presses are judged against the time at the start of the step, like the level compiler does.
+    if (pressed) this.onJudged(r.press(r.songTime, p.x, p.y, this.time));
+    r.songTime += dt;
+    r.expire(r.songTime);
+    p.speed = lv.speed;
+    p.step(dt, pressed, held, this.world);
+    this.playEffects(p);
+    this.collectCoins();
+    this.distance = Math.max(0, Math.floor(p.x));
+    this.rhythmProgress = r.progressAt(p.x);
+    r.feed(this.world, p.x + GEN_AHEAD);
+    this.world.prune(p.x - KEEP_BEHIND);
+    if (p.dead) this.die();
+    else if (p.x >= lv.endX) this.completeLevel();
+  }
+
+  private onJudged(j: Judgement | null): void {
+    if (j === 'perfect') this.fx.coin(this.player.x, this.player.y + 0.4);
+  }
+
+  /** After the finish line the runner keeps going on its own for a moment. */
+  private victoryLap(dt: number): void {
+    const p = this.player;
+    const lv = this.rhythm.level;
+    if (!lv || p.dead || p.x > lv.endX + VICTORY_LAP) return;
+    p.step(dt, false, false, this.world);
+    this.rhythm.songTime += dt;
+    this.rhythm.feed(this.world, p.x + GEN_AHEAD);
+    this.world.prune(p.x - KEEP_BEHIND);
+    this.playEffects(p);
+  }
+
+  /** Practice mode: reappear at the last checkpoint passed, with the music from that point. */
+  private respawn(): void {
+    const r = this.rhythm;
+    r.begin(this.world, this.player, r.checkpointBefore(r.songTime));
+    this.view.reset();
+    this.startSong();
+  }
+
+  private completeLevel(): void {
+    const r = this.rhythm;
+    this.rhythmProgress = 100;
+    this.deadTime = 0;
+    if (!r.practice) {
+      const rec = this.levelRecord(r.index);
+      this.rhythmNewBest = !rec.done;
+      rec.best = 100;
+      rec.done = true;
+      rec.acc = Math.max(rec.acc, r.accuracy);
+      rec.discos |= r.discoMask;
+      this.save.flush();
+      this.checkUnlocks(); // "complete N levels" / "collect N discos"
+    }
+    this.celebrate = true;
+    this.audio.sfx('record');
+    this.setState('complete');
+  }
+
   /** Count movers the runner has just passed; true if any were. */
   private countDodged(): boolean {
     const w = this.world;
@@ -407,13 +633,15 @@ export class Game {
 
   /** Turn this step's physics events into particles and character animation. */
   private playEffects(p: Player): void {
+    // In rhythm levels the song is the feedback: no jump/land blips on top of it.
+    const quiet = this.mode === 'rhythm';
     if (p.jumped) {
-      this.audio.sfx('jump');
+      if (!quiet) this.audio.sfx('jump');
       this.fx.jump(p.x, p.y);
       this.view.jump();
     }
     if (p.landed) {
-      this.audio.sfx('land', p.landSpeed / 20);
+      if (!quiet) this.audio.sfx('land', p.landSpeed / 20);
       this.fx.land(p.x, p.y, p.landSpeed);
       this.view.land(p.landSpeed);
     }
@@ -428,6 +656,7 @@ export class Game {
       const c = this.world.overlap(p.x - 0.4, p.y, p.x + 0.4, p.y + 0.8, COIN);
       if (!c) return;
       c.taken = true;
+      if (this.mode === 'rhythm') this.rhythm.takeDisco(c);
       this.coins++;
       this.audio.coin();
       this.fx.coin((c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2);
@@ -445,6 +674,24 @@ export class Game {
 
   private die(): void {
     this.deadTime = 0;
+    if (this.mode === 'rhythm') {
+      this.audio.stopSong();
+      this.audio.sfx('death');
+      this.fx.death(this.player.x, Math.max(this.player.y, -1));
+      if (!this.reducedMotion) this.shake = 1;
+      this.flash = 0.6;
+      const r = this.rhythm;
+      if (r.practice) {
+        r.respawnT = RESPAWN_DELAY;
+        return;
+      }
+      const rec = this.levelRecord(r.index);
+      this.rhythmNewBest = this.rhythmProgress > rec.best;
+      rec.best = Math.max(rec.best, this.rhythmProgress);
+      this.save.flush();
+      this.setState('dead');
+      return;
+    }
     this.commitRun();
     // Burst at the body's last position (clamped so a fall into a pit is still visible).
     this.audio.sfx('death');
