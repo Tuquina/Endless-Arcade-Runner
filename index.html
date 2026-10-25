@@ -38,12 +38,13 @@
 
       <section id="screen-menu" class="screen" data-show="true" aria-label="Menú principal">
         <div class="panel menu">
-          <div class="mascot" aria-hidden="true"><i></i><i></i></div>
+          <canvas id="menu-skin" class="menu-skin" aria-hidden="true"></canvas>
           <h1 class="logo"><span>ONE</span><span>BUTTON</span></h1>
           <p class="menu-best">RÉCORD <b id="menu-best">0</b></p>
           <div class="goal" aria-live="polite">
             <div class="goal-text"><span id="goal-label">Próximo aspecto</span><b id="goal-num"></b></div>
             <div class="goal-bar"><i id="goal-fill"></i></div>
+            <p id="goal-hint" class="goal-hint"></p>
           </div>
           <button class="btn btn-primary" data-action="play">Jugar</button>
           <div class="btn-row">
@@ -83,7 +84,7 @@
       <section id="screen-skins" class="screen" data-show="false" aria-label="Aspectos">
         <div class="panel panel-wide">
           <h2 class="title">Aspectos</h2>
-          <p class="skins-sub">Se desbloquean llegando lejos en una sola partida.</p>
+          <p class="skins-sub">Cumplí objetivos para desbloquearlos: distancia, monedas, partidas, sierras y prensas.</p>
           <div id="skin-grid" class="skin-grid"></div>
           <button class="btn btn-ghost" data-action="back">Volver</button>
         </div>

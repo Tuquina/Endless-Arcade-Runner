@@ -13,6 +13,9 @@ export interface SaveData {
   sfx: boolean;
   /** Longest distance (m) ever reached in one run; drives the skin challenges. */
   maxDist: number;
+  /** Lifetime obstacles dodged (skin objectives). */
+  saws: number;
+  crushers: number;
   /** Selected and unlocked skin ids. */
   skin: string;
   unlocked: string[];
@@ -26,7 +29,7 @@ export interface StorageLike {
   setItem(key: string, value: string): void;
 }
 
-const defaults = (): SaveData => ({ v: 1, best: 0, bestDist: 0, attempts: 0, coins: 0, music: true, sfx: true, maxDist: 0, skin: 'classic', unlocked: ['classic'] });
+const defaults = (): SaveData => ({ v: 1, best: 0, bestDist: 0, attempts: 0, coins: 0, music: true, sfx: true, maxDist: 0, saws: 0, crushers: 0, skin: 'classic', unlocked: ['classic'] });
 
 /** Non-negative finite integer, else the fallback. Guards against hand-edited or corrupt storage. */
 function count(value: unknown, fallback: number): number {
@@ -44,6 +47,8 @@ function migrate(raw: unknown): SaveData {
     out.music = typeof o.music === 'boolean' ? o.music : true;
     out.sfx = typeof o.sfx === 'boolean' ? o.sfx : true;
     out.maxDist = count(o.maxDist, 0);
+    out.saws = count(o.saws, 0);
+    out.crushers = count(o.crushers, 0);
     if (typeof o.skin === 'string' && o.skin.length > 0 && o.skin.length <= 32) out.skin = o.skin;
     if (Array.isArray(o.unlocked)) {
       const ids = o.unlocked.filter((v): v is string => typeof v === 'string' && v.length > 0 && v.length <= 32);
@@ -99,6 +104,8 @@ export class Save {
         }
         d.maxDist = Math.max(d.maxDist, other.maxDist);
         d.attempts = Math.max(d.attempts, other.attempts);
+        d.saws = Math.max(d.saws, other.saws);
+        d.crushers = Math.max(d.crushers, other.crushers);
         d.unlocked = [...new Set([...d.unlocked, ...other.unlocked])];
       }
     } catch {

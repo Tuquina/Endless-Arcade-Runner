@@ -37,12 +37,14 @@ describe('Save', () => {
   it('stores skins and challenge progress, sanitising bad input', () => {
     const st = fake();
     const a = new Save(st);
-    expect(a.data).toMatchObject({ maxDist: 0, skin: 'classic', unlocked: ['classic'] });
+    expect(a.data).toMatchObject({ maxDist: 0, saws: 0, crushers: 0, skin: 'classic', unlocked: ['classic'] });
     a.data.maxDist = 640;
+    a.data.saws = 12;
+    a.data.crushers = 5;
     a.data.skin = 'mint';
     a.data.unlocked = ['classic', 'mint'];
     a.flush();
-    expect(new Save(st).data).toMatchObject({ maxDist: 640, skin: 'mint', unlocked: ['classic', 'mint'] });
+    expect(new Save(st).data).toMatchObject({ maxDist: 640, saws: 12, crushers: 5, skin: 'mint', unlocked: ['classic', 'mint'] });
     const bad = new Save(fake(JSON.stringify({ skin: 7, unlocked: ['a', 3, 'a', '', 'b'], maxDist: -1 })));
     expect(bad.data).toMatchObject({ skin: 'classic', unlocked: ['a', 'b'], maxDist: 0 });
   });
@@ -54,12 +56,13 @@ describe('Save', () => {
     tabA.data.best = 500;
     tabA.data.bestDist = 480;
     tabA.data.maxDist = 1200;
+    tabA.data.saws = 30;
     tabA.data.unlocked = ['classic', 'mint', 'rose', 'shades'];
     tabA.flush();
     tabB.data.attempts = 3;
     tabB.flush();
     const merged = new Save(st).data;
-    expect(merged).toMatchObject({ best: 500, bestDist: 480, maxDist: 1200, attempts: 3 });
+    expect(merged).toMatchObject({ best: 500, bestDist: 480, maxDist: 1200, attempts: 3, saws: 30 });
     expect(merged.unlocked).toEqual(['classic', 'mint', 'rose', 'shades']);
   });
 

@@ -1,5 +1,5 @@
 import { Pool } from '../core/Pool';
-import { COIN, HAZARD, Rect, SOLID, moverLift, type RectKind, type Wave } from './Rect';
+import { COIN, HAZARD, Rect, SOLID, WAVE_SLAM, moverLift, type RectKind, type Wave } from './Rect';
 
 /** Where the world starts (behind the player's spawn at x = 0). */
 export const WORLD_START = -12;
@@ -16,6 +16,12 @@ export class World {
   private readonly mask: number;
   private colBase = Math.floor(WORLD_START);
   private readonly pool = new Pool(() => new Rect());
+  /**
+   * Centre x and kind of every mover generated since the last reset, in increasing x. The game walks
+   * it with a pointer to count obstacles the runner has dodged (a skin objective).
+   */
+  readonly moverX: number[] = [];
+  readonly moverIsCrusher: boolean[] = [];
 
   /** `ringCols` must be a power of two and larger than the generated span kept alive. */
   constructor(private readonly ringCols = 256) {
@@ -26,6 +32,8 @@ export class World {
   /** Empty the world; geometry will start at `origin` (a non-default origin is for debugging far into a run). */
   reset(origin = WORLD_START): void {
     this.prune(Infinity);
+    this.moverX.length = 0;
+    this.moverIsCrusher.length = 0;
     this.cursor = origin;
     this.colBase = Math.floor(origin);
   }
@@ -56,6 +64,8 @@ export class World {
     r.phase = phase;
     r.wave = wave;
     r.railTop = railTop;
+    this.moverX.push((x0 + x1) / 2);
+    this.moverIsCrusher.push(wave === WAVE_SLAM);
     return r;
   }
 

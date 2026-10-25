@@ -2,7 +2,7 @@ import { PLAYER_HEIGHT } from '../physics/constants';
 import type { Game } from '../core/Game';
 import { COIN, HAZARD, SOLID, WAVE_SLAM, moverCycle, moverLift, type Rect } from '../world/Rect';
 import { Confetti } from './Confetti';
-import { GOALS, GOAL_SKIN_IDS } from '../core/skins';
+import { DISTANCE_GOALS } from '../core/skins';
 import { THEMES, ThemeBlender } from './themes';
 
 /**
@@ -336,17 +336,18 @@ export class Renderer {
       ctx.font = `800 ${Math.round(scale * 0.42)}px system-ui, sans-serif`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      for (let i = 0; i < GOALS.length; i++) {
-        const gx = this.X(GOALS[i]!);
+      for (let i = 0; i < DISTANCE_GOALS.length; i++) {
+        const goal = DISTANCE_GOALS[i]!;
+        const gx = this.X(goal.n);
         if (gx < -scale * 3 || gx > this.w + scale) continue;
-        const reached = game.isUnlocked(GOAL_SKIN_IDS[i]!);
+        const reached = game.isUnlocked(goal.id);
         ctx.strokeStyle = reached ? 'rgba(255,255,255,0.35)' : 'rgba(255,210,63,0.85)';
         ctx.fillStyle = ctx.strokeStyle;
         ctx.beginPath();
         ctx.moveTo(gx, this.groundPx);
         ctx.lineTo(gx, this.groundPx - scale * 6);
         ctx.stroke();
-        ctx.fillText(`${GOALS[i]} m`, gx + scale * 0.2, this.groundPx - scale * 6);
+        ctx.fillText(`${goal.n} m`, gx + scale * 0.2, this.groundPx - scale * 6);
       }
       ctx.setLineDash([]);
     }
