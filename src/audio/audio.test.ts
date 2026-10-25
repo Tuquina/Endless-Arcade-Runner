@@ -95,6 +95,28 @@ describe('AudioSystem and autoplay policy', () => {
     expect(created[0]!.oscillators).toBeGreaterThan(n);
   });
 
+  it('discos in the music modes follow their own setting (soft by default, quieter than coins)', async () => {
+    const { audio, created, gesture, settings } = setup();
+    await gesture();
+    const c = created[0]!;
+    const count = (f: () => void): number => {
+      const n = c.oscillators;
+      f();
+      return c.oscillators - n;
+    };
+    const coin = count(() => audio.coin());
+    vi.advanceTimersByTime(1000);
+    expect(count(() => audio.disco())).toBeGreaterThan(0); // missing setting = soft bell
+    settings.musicSfx = 'off';
+    expect(count(() => audio.disco())).toBe(0);
+    settings.musicSfx = 'full';
+    vi.advanceTimersByTime(1000);
+    expect(count(() => audio.disco())).toBe(coin);
+    settings.musicSfx = 'soft';
+    settings.sfx = false; // the master effects switch still wins
+    expect(count(() => audio.disco())).toBe(0);
+  });
+
   it('music only schedules notes while enabled and on, and stops when switched off', async () => {
     const { audio, created, gesture, settings } = setup();
     audio.setMusicMode('on');

@@ -1,6 +1,6 @@
 import { midiToFreq, noise, tone } from './synth';
 
-export type SfxName = 'jump' | 'land' | 'coin' | 'death' | 'record' | 'click';
+export type SfxName = 'jump' | 'land' | 'coin' | 'disco' | 'death' | 'record' | 'click';
 
 /** Everything an effect needs to make sound. */
 export interface SfxEnv {
@@ -33,6 +33,16 @@ export const SFX: Record<SfxName, (e: SfxEnv, t: number, amount: number) => numb
     tone(e.ctx, e.out, { type: 'square', freq: 988 * k, start: t, dur: 0.07, gain: 0.22 });
     tone(e.ctx, e.out, { type: 'square', freq: 1319 * k, start: t + 0.065, dur: 0.2, gain: 0.22 });
     return 0.3;
+  },
+
+  /**
+   * Disco pickup in the music modes: a soft, short bell (pure sines, quiet, fixed pitch) that sits under
+   * the song instead of cutting through it like the square-wave coin of the endless runner.
+   */
+  disco(e, t) {
+    tone(e.ctx, e.out, { type: 'sine', freq: 1568, start: t, dur: 0.22, gain: 0.07, attack: 0.006 });
+    tone(e.ctx, e.out, { type: 'sine', freq: 3136, start: t, dur: 0.12, gain: 0.02, attack: 0.006 });
+    return 0.25;
   },
 
   death(e, t) {

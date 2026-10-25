@@ -178,8 +178,16 @@
           <h2 class="title">Ajustes</h2>
           <button class="toggle" role="switch" aria-checked="true" data-action="toggle-music"><span>Música</span><i></i></button>
           <button class="toggle" role="switch" aria-checked="true" data-action="toggle-sfx"><span>Efectos</span><i></i></button>
+          <div class="opt">
+            <span>Discos con música <small>Al juntarlos en Ritmo, Gravedad y Ω.</small></span>
+            <div class="seg" id="music-sfx-row" role="radiogroup" aria-label="Sonido de los discos con música">
+              <button class="seg-btn" role="radio" data-action="music-sfx" data-value="soft">Suaves</button>
+              <button class="seg-btn" role="radio" data-action="music-sfx" data-value="full">Normales</button>
+              <button class="seg-btn" role="radio" data-action="music-sfx" data-value="off">Apagados</button>
+            </div>
+          </div>
           <div class="calib">
-            <span>Sincronía del ritmo <small>Si saltás a tiempo y la música suena antes o después (por ejemplo, con auriculares Bluetooth), ajustalo.</small></span>
+            <span>Sincronía del ritmo <small>Si la música suena antes o después de tus saltos (p. ej. con Bluetooth).</small></span>
             <div class="calib-ctl">
               <button class="icon-btn" data-action="latency-minus" aria-label="Menos desfase">−</button>
               <b id="latency-val">0 ms</b>

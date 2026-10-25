@@ -153,6 +153,11 @@ ejecutá `npm run gen:variants` (~2 min) y commiteá el resultado**.
 Un modo aparte del runner infinito: **8 niveles fijos**, cada uno con una canción original compuesta para el juego.
 Los obstáculos caen sobre las notas, así que saltar *en el tiempo de la música* es lo más seguro.
 
+**Efectos que no tapan la canción.** En Ritmo, Gravedad y Ω los saltos y aterrizajes no suenan. Los discos
+suenan con una campanita suave (ondas puras, ~13 dB por debajo de la moneda del modo sin fin y sin escala que
+sube). En **Ajustes → Discos con música** se elige *Suaves* (por defecto), *Normales* (la moneda de siempre) o
+*Apagados*. Al elegir, suena una muestra, y la opción queda guardada.
+
 **Música propia, sin archivos ni derechos de terceros.** Cada canción es un dato (`src/rhythm/levels.ts`):
 tempo, tonalidad y escala, y secciones (intro, verso, estribillo, puente, final, outro) con batería, bajo,
 arpegios, pads y melodía escritos en la misma grilla de semicorcheas que el *chart* de obstáculos. El secuenciador
