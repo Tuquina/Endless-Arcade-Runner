@@ -113,68 +113,6 @@
   }
 }
 
-/* ---------- menu ---------- */
-.logo {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  line-height: 0.92;
-  font-size: clamp(2.6rem, min(14vw, 11vh), 5rem);
-  font-weight: 900;
-  font-style: italic;
-  letter-spacing: 0.02em;
-  text-shadow: 0 0.06em 0 rgba(0, 0, 0, 0.35);
-}
-.logo span:first-child {
-  color: var(--gold);
-}
-.logo span:last-child {
-  background: linear-gradient(90deg, var(--green), #6ec1ff);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: none;
-}
-.menu-best {
-  margin: 0;
-  color: var(--muted);
-  letter-spacing: 0.12em;
-  font-size: 0.95rem;
-}
-.menu-best b {
-  color: var(--gold);
-  font-size: 1.3em;
-}
-.hint {
-  margin: 0.4rem 0 0;
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-weight: 600;
-  line-height: 1.5;
-}
-.hint-touch {
-  display: none;
-}
-@media (pointer: coarse) {
-  .hint-pc {
-    display: none;
-  }
-  .hint-touch {
-    display: inline;
-  }
-}
-.menu-skin {
-  width: 6.2rem;
-  height: 6.2rem;
-  animation: bob 1.1s ease-in-out infinite;
-}
-@keyframes bob {
-  50% {
-    transform: translateY(-0.6rem) rotate(6deg);
-  }
-}
 
 /* ---------- pause / settings ---------- */
 .title {
@@ -478,17 +416,6 @@
   .panel {
     gap: 0.4rem;
   }
-  .hint {
-    display: none;
-  }
-  /* The character stays (it hides the easter egg) but leaves the layout: a small badge in the corner. */
-  .menu-skin {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 3.2rem;
-    height: 3.2rem;
-  }
   .btn-primary {
     min-height: 3.4rem;
   }
@@ -510,37 +437,6 @@
 }
 
 /* ---------- challenges & skins ---------- */
-.goal {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-.goal-text {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.8rem;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  text-transform: uppercase;
-}
-.goal-text b {
-  color: var(--gold);
-}
-.goal-bar {
-  height: 0.55rem;
-  border-radius: 99px;
-  background: rgba(255, 255, 255, 0.16);
-  overflow: hidden;
-}
-.goal-bar i {
-  display: block;
-  height: 100%;
-  width: 0;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--green), var(--gold));
-  transition: width 0.5s cubic-bezier(0.2, 0.9, 0.3, 1);
-}
 .btn-row {
   display: flex;
   gap: calc(var(--u) * 0.6);
@@ -648,14 +544,6 @@
   width: 0;
   background: linear-gradient(90deg, var(--green), var(--gold));
 }
-.goal-hint {
-  margin: 0;
-  min-height: 1.2em;
-  text-align: center;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--muted);
-}
 
 
 .unlock-badge {
@@ -699,9 +587,6 @@
 }
 
 @media (max-height: 460px) {
-  .goal {
-    display: none;
-  }
   .skin-card {
     min-height: 5.6rem;
     padding-block: 0.5rem;
@@ -711,48 +596,6 @@
   }
 }
 
-/* ---------- game mode + difficulty ---------- */
-.modes {
-  display: flex;
-  gap: 0.5rem;
-  width: 100%;
-}
-.mode-chip {
-  appearance: none;
-  border: 0;
-  font: inherit;
-  color: var(--ink);
-  flex: 1;
-  min-height: 2.9rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 0.9rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  line-height: 1.15;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.14);
-  touch-action: manipulation;
-}
-.mode-chip b {
-  font-size: 0.95rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.mode-chip small {
-  font-size: 0.7rem;
-  color: var(--muted);
-  font-weight: 600;
-}
-.mode-chip[aria-pressed='true'] {
-  background: rgba(255, 210, 63, 0.16);
-  box-shadow: inset 0 0 0 2px var(--gold);
-}
-.mode-chip:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 .seg {
   display: flex;
   width: 100%;
@@ -794,20 +637,6 @@
   color: #0b2236;
   background: linear-gradient(180deg, #a6dcff, #6ec1ff);
 }
-.seg-btn:focus-visible,
-.mode-chip:focus-visible {
-  outline: 3px solid var(--gold);
-  outline-offset: 2px;
-}
-.diff-hint {
-  margin: -0.2rem 0 0;
-  min-height: 2.4em;
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 600;
-  line-height: 1.25;
-}
 .dead-diff {
   margin: 0;
   color: var(--muted);
@@ -815,24 +644,6 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-}
-/* Short screens: trim the menu so Jugar stays on screen. */
-@media (max-height: 760px) {
-  .diff-hint,
-  .mode-chip small,
-  .hint {
-    display: none;
-  }
-  .menu-skin {
-    width: 4.2rem;
-    height: 4.2rem;
-  }
-  .mode-chip {
-    min-height: 2.4rem;
-  }
-  .seg-btn {
-    min-height: 2.4rem;
-  }
 }
 
 /* ---------- rhythm mode ---------- */
@@ -924,20 +735,6 @@
   width: 1.5em;
   height: 1.5em;
   margin-right: 0.25em;
-}
-.menu-rhythm {
-  margin: 0;
-  color: var(--muted);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  font-size: 0.9rem;
-}
-.menu-rhythm:empty {
-  display: none;
-}
-#screen-menu:not([data-mode='endless']) .seg,
-#screen-menu:not([data-mode='endless']) .diff-hint {
-  display: none;
 }
 
 .level-list {
@@ -1188,76 +985,6 @@
   font-size: clamp(1.5rem, 7.5vw, 2rem);
 }
 
-/* ---------- easter egg ---------- */
-.menu-skin {
-  cursor: pointer;
-  touch-action: manipulation;
-  pointer-events: auto;
-}
-.menu-skin.poke {
-  animation: poke 0.18s ease-out;
-}
-@keyframes poke {
-  40% {
-    transform: scale(0.82, 1.15);
-  }
-}
-.cheat-badge {
-  appearance: none;
-  border: 0;
-  font: inherit;
-  color: #2a1606;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 0.4rem 1rem;
-  border-radius: 1rem;
-  background: linear-gradient(90deg, #ffd23f, #ff7ad9, #35e0ff);
-  cursor: pointer;
-  touch-action: manipulation;
-  animation: pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.6) both;
-}
-.cheat-badge[hidden] {
-  display: none;
-}
-.cheat-badge b {
-  font-size: 0.85rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.cheat-badge small {
-  font-size: 0.7rem;
-  font-weight: 700;
-}
-.mode-chip[hidden] {
-  display: none;
-}
-.mode-chip[data-mode='secret'] {
-  background: linear-gradient(135deg, rgba(255, 210, 63, 0.25), rgba(255, 122, 217, 0.25), rgba(53, 224, 255, 0.25));
-}
-.hud[data-mode='secret'] .hud-right .hud-rhythm {
-  display: none;
-}
-.modes {
-  flex-wrap: wrap;
-}
-.mode-chip {
-  flex: 1 1 28%;
-}
-@media (max-height: 460px) {
-  .cheat-badge {
-    position: absolute;
-    top: 0;
-    right: 0;
-    padding: 0.25rem 0.7rem;
-  }
-  .cheat-badge small {
-    display: none;
-  }
-  .mode-chip {
-    min-height: 2.3rem;
-  }
-}
 
 /* In-game bars change every few frames: scale them on the compositor instead of re-laying out the HUD. */
 .hud-progress b,
@@ -1266,4 +993,427 @@
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
+}
+
+/* ---------- main menu ----------
+   Mobile first: a top bar (secret pill · settings), a hero that floats in the free space and a block of
+   controls anchored to the bottom, near the thumb. The mode-dependent slot (.menu-ctx) has a fixed height,
+   so switching modes never moves Jugar or the tabs. */
+.screen-menu {
+  place-items: stretch center;
+}
+.menu {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 24rem);
+  min-width: 0; /* single-line texts (ellipsis) must not widen the menu past narrow screens */
+  min-height: 100%;
+  max-height: 52rem;
+  margin: auto;
+  transform: translateY(14px) scale(0.97);
+  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.screen[data-show='true'] .menu {
+  transform: none;
+}
+.menu-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3.2rem;
+}
+.menu-settings {
+  margin-left: auto;
+}
+.menu-settings svg {
+  width: 1.6rem;
+  height: 1.6rem;
+  fill: currentColor;
+}
+.menu-hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 0.6);
+  min-height: 0;
+  padding-block: 0.5rem;
+}
+.logo {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0.92;
+  font-size: clamp(2.4rem, min(14vw, 8.5vh), 4.6rem);
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0.06em 0 rgba(0, 0, 0, 0.35);
+}
+.logo span:first-child {
+  color: var(--gold);
+}
+.logo span:last-child {
+  background: linear-gradient(90deg, var(--green), #6ec1ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+}
+.menu-stat {
+  margin: 0;
+  min-height: 1.4em;
+  color: var(--muted);
+  letter-spacing: 0.12em;
+  font-size: 0.9rem;
+  text-align: center;
+}
+.menu-stat b {
+  color: var(--gold);
+  font-size: 1.25em;
+  letter-spacing: 0.04em;
+}
+
+/* The character is also the easter egg: 11 quick taps unlock everything for the session. */
+.menu-skin {
+  width: clamp(3.6rem, 11vh, 6.2rem);
+  height: clamp(3.6rem, 11vh, 6.2rem);
+  cursor: pointer;
+  touch-action: manipulation;
+  pointer-events: auto;
+  animation: bob 1.1s ease-in-out infinite;
+}
+.menu-skin.poke {
+  animation: poke 0.18s ease-out;
+}
+@keyframes bob {
+  50% {
+    transform: translateY(-0.6rem) rotate(6deg);
+  }
+}
+@keyframes poke {
+  40% {
+    transform: scale(0.82, 1.15);
+  }
+}
+.cheat-pill {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.75rem;
+  padding: 0 0.6rem 0 0.95rem;
+  border-radius: 99px;
+  color: #2a1606;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #ffd23f, #ff7ad9, #35e0ff);
+  cursor: pointer;
+  touch-action: manipulation;
+  animation: pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.6) both;
+}
+.cheat-pill[hidden] {
+  display: none;
+}
+.cheat-pill svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: currentColor;
+  opacity: 0.75;
+}
+
+.menu-controls {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding-top: 0.4rem;
+}
+.modes {
+  display: flex;
+  gap: 0.4rem;
+}
+.mode-chip {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 2.75rem; /* 44px */
+  padding: 0 0.3rem;
+  border-radius: 0.85rem;
+  color: var(--muted);
+  font-size: clamp(0.78rem, 3.6vw, 0.92rem);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.mode-chip:active {
+  transform: scale(0.96);
+}
+.mode-chip[aria-pressed='true'] {
+  color: var(--ink);
+  background: rgba(255, 210, 63, 0.16);
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+.mode-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.mode-chip[hidden] {
+  display: none;
+}
+.mode-chip[data-mode='secret'] {
+  flex: 0 0 2.9rem;
+  font-size: 1.15rem;
+  color: var(--ink);
+  background: linear-gradient(135deg, rgba(255, 210, 63, 0.3), rgba(255, 122, 217, 0.3), rgba(53, 224, 255, 0.3));
+}
+.seg-btn:focus-visible,
+.mode-chip:focus-visible,
+.goal-card:focus-visible,
+.cheat-pill:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Fixed-height slot: difficulty in the endless mode, a one-line description in the others. */
+.menu-ctx {
+  height: 4.75rem;
+  display: flex;
+  flex-direction: column;
+}
+.menu-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.seg {
+  display: flex;
+  width: 100%;
+  padding: 0.25rem;
+  gap: 0.25rem;
+  border-radius: 1rem;
+  background: rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12);
+}
+.seg-btn {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex: 1;
+  min-height: 2.6rem;
+  border-radius: 0.75rem;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.seg-btn:active {
+  transform: scale(0.96);
+}
+.seg-btn[aria-checked='true'] {
+  color: #0b2a20;
+  background: linear-gradient(180deg, #4dffc0, var(--green));
+}
+.seg-btn[data-difficulty='hard'][aria-checked='true'] {
+  color: #2a0b0b;
+  background: linear-gradient(180deg, #ff9a8a, #ff5a4d);
+}
+.seg-btn[data-difficulty='easy'][aria-checked='true'] {
+  color: #0b2236;
+  background: linear-gradient(180deg, #a6dcff, #6ec1ff);
+}
+.diff-hint {
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mode-card {
+  flex: 1;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 1rem;
+  border-radius: 1rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.3;
+  background: rgba(0, 0, 0, 0.22);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+#screen-menu[data-mode='endless'] .mode-card,
+#screen-menu:not([data-mode='endless']) .menu-diff {
+  display: none;
+}
+
+/* Skins entry that also shows the next unlock, so the goal never competes with Jugar. */
+.goal-card {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.6rem 0.95rem 0.65rem;
+  border-radius: 1rem;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.16);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.1s ease, filter 0.15s ease;
+}
+.goal-card:active {
+  transform: scale(0.97);
+}
+@media (hover: hover) {
+  .goal-card:hover,
+  .mode-chip:hover {
+    filter: brightness(1.15);
+  }
+}
+.goal-text {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.goal-title {
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.goal-title::after {
+  content: ' ›';
+  color: var(--muted);
+}
+#goal-num {
+  color: var(--gold);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.goal-bar {
+  display: block;
+  height: 0.45rem;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+.goal-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--green), var(--gold));
+  transition: width 0.5s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.goal-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hint {
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.hint-touch {
+  display: none;
+}
+@media (pointer: coarse) {
+  .hint-pc {
+    display: none;
+  }
+  .hint-touch {
+    display: inline;
+  }
+}
+/* Very short portrait phones: drop the controls hint (the first run teaches it) before anything else. */
+@media (max-height: 640px) {
+  .hint {
+    display: none;
+  }
+  .menu-controls {
+    gap: 0.55rem;
+  }
+}
+
+/* Landscape phones: two columns, hero on the left and the same controls on the right. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .menu {
+    width: min(100%, 50rem);
+    display: grid;
+    grid-template-columns: 1fr minmax(0, 22rem);
+    column-gap: calc(var(--u) * 1.5);
+    align-items: center;
+  }
+  .menu-top {
+    position: absolute;
+    top: calc(0.5rem + var(--safe-t));
+    left: calc(0.75rem + var(--safe-l));
+    right: calc(0.75rem + var(--safe-r));
+    z-index: 1;
+    pointer-events: none;
+  }
+  .menu-top > * {
+    pointer-events: auto;
+  }
+  .menu-hero {
+    padding: 0;
+  }
+  .logo {
+    font-size: clamp(2.2rem, 7vw, 3.6rem);
+  }
+  .menu-skin {
+    width: 3.6rem;
+    height: 3.6rem;
+  }
+  .menu-controls {
+    padding: 0;
+    gap: 0.5rem;
+  }
+  .hint {
+    display: none;
+  }
+  .menu .btn-primary {
+    min-height: 3.4rem;
+  }
+}
+
+/* The secret run has no discos to count. */
+.hud[data-mode='secret'] .hud-right .hud-rhythm {
+  display: none;
 }

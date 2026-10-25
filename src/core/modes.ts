@@ -13,15 +13,19 @@ export interface ModeInfo {
   id: GameMode;
   name: string;
   blurb: string;
+  /** Main-menu card for the modes without a difficulty selector. */
+  detail: string;
+  /** Short tab label in the main menu. */
+  tab: string;
   available: boolean;
 }
 
 export const GAME_MODES: readonly ModeInfo[] = [
-  { id: 'endless', name: 'Sin fin', blurb: 'Corré lo más lejos', available: true },
-  { id: 'rhythm', name: 'Ritmo', blurb: 'Niveles musicales', available: true },
-  { id: 'gravity', name: 'Gravedad', blurb: 'Clásicos al revés', available: true },
+  { id: 'endless', name: 'Sin fin', tab: 'Sin fin', blurb: 'Corré lo más lejos', detail: '', available: true },
+  { id: 'rhythm', name: 'Ritmo', tab: 'Ritmo', blurb: 'Niveles musicales', detail: '8 canciones originales: saltá al compás.', available: true },
+  { id: 'gravity', name: 'Gravedad', tab: 'Gravedad', blurb: 'Clásicos al revés', detail: 'Clásicos con portales, nave y piso al revés.', available: true },
   /** Only shown while the easter egg is active (see Game.cheats). */
-  { id: 'secret', name: 'Ω Secreto', blurb: 'Infinito, con todo', available: true },
+  { id: 'secret', name: 'Ω Secreto', tab: 'Ω', blurb: 'Infinito, con todo', detail: 'Infinito y al azar, con todas las mecánicas.', available: true },
 ];
 
 export const DEFAULT_MODE: GameMode = 'endless';
@@ -32,7 +36,7 @@ export function isGameMode(v: unknown): v is GameMode {
 
 /** Menu copy for each endless difficulty. */
 export const DIFFICULTY_INFO = {
-  easy: { name: 'Fácil', blurb: 'Más lento y con más margen. No suma metros para aspectos de distancia.' },
+  easy: { name: 'Fácil', blurb: 'Más margen · no suma metros para aspectos.' },
   normal: { name: 'Normal', blurb: 'La experiencia de siempre.' },
-  hard: { name: 'Difícil', blurb: 'Acelera antes, los obstáculos llegan antes y con menos respiro.' },
+  hard: { name: 'Difícil', blurb: 'Más rápido y con menos respiro.' },
 } as const;

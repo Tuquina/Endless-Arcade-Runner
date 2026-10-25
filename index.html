@@ -53,32 +53,43 @@
         </div>
       </div>
 
-      <section id="screen-menu" class="screen" data-show="true" aria-label="Menú principal">
-        <div class="panel menu">
-          <canvas id="menu-skin" class="menu-skin" aria-hidden="true"></canvas>
-          <button id="cheat-badge" class="cheat-badge" data-action="cheats-off" hidden>
-            <b>Modo secreto activo</b><small>Todo desbloqueado en esta sesión · tocá para desactivar</small>
-          </button>
-          <h1 class="logo"><span>ONE</span><span>BUTTON</span></h1>
-          <p class="menu-best">RÉCORD <b id="menu-best">0</b></p>
-          <div class="modes" id="mode-row" role="group" aria-label="Modo de juego"></div>
-          <div class="seg" id="diff-row" role="radiogroup" aria-label="Dificultad"></div>
-          <p id="diff-hint" class="diff-hint"></p>
-          <div class="goal" aria-live="polite">
-            <div class="goal-text"><span id="goal-label">Próximo aspecto</span><b id="goal-num"></b></div>
-            <div class="goal-bar"><i id="goal-fill"></i></div>
-            <p id="goal-hint" class="goal-hint"></p>
+      <!-- Main menu, mobile first: the hero (character + logo) floats in the free space and every control
+           sits in a fixed-height block near the thumb, so switching modes never moves Jugar. -->
+      <section id="screen-menu" class="screen screen-menu" data-show="true" aria-label="Menú principal">
+        <div class="menu">
+          <div class="menu-top">
+            <button id="cheat-badge" class="cheat-pill" data-action="cheats-off" aria-label="Desactivar el modo secreto" hidden>
+              <span>Ω Secreto</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6Z" /></svg>
+            </button>
+            <button class="icon-btn menu-settings" data-action="settings" aria-label="Ajustes">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5ZM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" transform="translate(-1 0)" /></svg>
+            </button>
           </div>
-          <p class="menu-rhythm" id="menu-rhythm"></p>
-          <button class="btn btn-primary" data-action="play"><span id="play-label">Jugar</span></button>
-          <div class="btn-row">
-            <button class="btn btn-ghost" data-action="skins">Aspectos</button>
-            <button class="btn btn-ghost" data-action="settings">Ajustes</button>
+          <div class="menu-hero">
+            <canvas id="menu-skin" class="menu-skin" aria-hidden="true"></canvas>
+            <h1 class="logo"><span>ONE</span><span>BUTTON</span></h1>
+            <p class="menu-stat" id="menu-stat"></p>
           </div>
-          <p class="hint">
-            <span class="hint-pc">Espacio · clic · ↑</span><span class="hint-touch">Tocá la pantalla</span><br />
-            Tocá para saltar · mantené para saltar más alto
-          </p>
+          <div class="menu-controls">
+            <div class="modes" id="mode-row" role="group" aria-label="Modo de juego"></div>
+            <div class="menu-ctx">
+              <div class="menu-diff">
+                <div class="seg" id="diff-row" role="radiogroup" aria-label="Dificultad"></div>
+                <p id="diff-hint" class="diff-hint"></p>
+              </div>
+              <p class="mode-card" id="mode-card"></p>
+            </div>
+            <button class="btn btn-primary" data-action="play"><span id="play-label">Jugar</span></button>
+            <button class="goal-card" data-action="skins" id="goal-card">
+              <span class="goal-text"><b class="goal-title">Aspectos</b><span id="goal-num"></span></span>
+              <span class="goal-bar"><i id="goal-fill"></i></span>
+              <small id="goal-label" class="goal-label"></small>
+            </button>
+            <p class="hint">
+              <span class="hint-pc">Espacio, clic o ↑ para saltar · mantené para saltar más alto</span>
+              <span class="hint-touch">Tocá para saltar · mantené para saltar más alto</span>
+            </p>
+          </div>
         </div>
       </section>
 
