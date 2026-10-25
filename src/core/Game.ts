@@ -6,6 +6,7 @@ import { type GameMode } from './modes';
 import { RhythmRun, popcount, type Judgement } from '../rhythm/RhythmRun';
 import { LEVELS } from '../rhythm/levels';
 import { GRAVITY_LEVELS } from '../rhythm/gravityLevels';
+import { SecretStream, ZONE_NAMES, type ZoneSpan } from '../rhythm/secret';
 import type { LevelDef } from '../rhythm/level';
 import { Generator } from '../world/Generator';
 import { COIN } from '../world/Rect';
@@ -49,6 +50,9 @@ export class Game {
   /** Rhythm mode: progress (%) of the last attempt, and whether it beat the best. */
   rhythmProgress = 0;
   rhythmNewBest = false;
+  /** Secret mode: the endless run being played (zones are generated as the runner gets close). */
+  stream: SecretStream | null = null;
+  private growing = false;
   difficulty = 0;
   /** Metres travelled this run (floor of x). */
   distance = 0;
@@ -131,6 +135,8 @@ export class Game {
     window.addEventListener('blur', () => this.pause());
     this.audio.latencyMs = this.save.data.latency;
     this.cheats = Game.readCheatFlag();
+    // The secret mode only exists while the easter egg is on.
+    if (this.save.data.mode === 'secret' && !this.cheats) this.save.data.mode = 'endless';
     this.reconcileSkins();
     this.resetRun();
     this.audio.setMusicMode('on'); // takes effect after the first user gesture
@@ -144,6 +150,7 @@ export class Game {
   /** Menu action: switch between the endless runner and the rhythm campaign. */
   setMode(mode: GameMode): void {
     if (this.state !== 'menu' || mode === this.save.data.mode) return;
+    if (mode === 'secret' && !this.cheats) return;
     this.save.data.mode = mode;
     this.save.flush();
     this.resetRun();
@@ -164,7 +171,25 @@ export class Game {
   }
 
   get levels(): readonly LevelDef[] {
-    return this.mode === 'gravity' ? GRAVITY_LEVELS : LEVELS;
+    return this.mode === 'gravity' ? GRAVITY_LEVELS : this.mode === 'secret' ? [] : LEVELS;
+  }
+
+  /** The secret run's current zone (for the HUD and banners). */
+  get zone(): ZoneSpan | null {
+    return this.stream?.zoneAt(this.player.x) ?? null;
+  }
+
+  /** Name of what is being played: level name, or the secret run's current zone. */
+  get trackName(): string {
+    if (this.mode === 'secret') {
+      const z = this.zone;
+      return z ? `Ω Zona ${z.index + 1} · ${ZONE_NAMES[z.kind]}` : 'Ω';
+    }
+    return this.levels[this.rhythm.index]?.name ?? '';
+  }
+
+  get secretBest(): number {
+    return this.save.data.secretBest;
   }
 
   /** Index of the level last chosen in the current campaign. */
@@ -219,6 +244,10 @@ export class Game {
       /* private mode: the flag just lives in memory */
     }
     if (!on) {
+      if (this.save.data.mode === 'secret') {
+        this.save.data.mode = 'endless';
+        this.save.flush();
+      }
       // Back to what was really earned: drop a borrowed skin and leave any borrowed level.
       if (!this.isUnlocked(this.save.data.skin)) this.selectSkinUnchecked(DEFAULT_SKIN);
       if (this.musical && !this.isLevelUnlocked(this.levelIndex)) this.levelIndex = 0;
@@ -484,6 +513,22 @@ export class Game {
   /** Build a fresh layout and put the player at the start, waiting for the first press. */
   private resetRun(): void {
     this.audio.stopSong();
+    if (this.mode === 'secret') {
+      this.stream = new SecretStream(this.seedCounter++);
+      this.rhythm.loadLevel(this.stream.level);
+      this.rhythm.practice = false;
+      this.rhythm.begin(this.world, this.player, null);
+      this.player.speed = this.stream.level.speed;
+      this.difficulty = 0;
+      this.distance = this.coins = this.score = 0;
+      this.deadTime = 0;
+      this.rhythmNewBest = false;
+      this.fx.clear();
+      this.view.reset();
+      this.shake = this.flash = 0;
+      return;
+    }
+    this.stream = null;
     if (this.musical) {
       const lv = this.rhythm.load(this.levels, this.levelIndex);
       this.rhythm.practice = this.save.data.practice;
@@ -528,7 +573,7 @@ export class Game {
   private beginRun(): void {
     this.unlockedNow.length = 0;
     if (this.musical) {
-      if (!this.rhythm.practice) this.levelRecord(this.rhythm.index).attempts++;
+      if (!this.rhythm.practice && this.mode !== 'secret') this.levelRecord(this.rhythm.index).attempts++;
       this.save.flush();
       this.setState('playing');
       this.startSong();
@@ -656,6 +701,20 @@ export class Game {
     this.collectCoins();
     this.distance = Math.max(0, Math.floor(p.x));
     this.rhythmProgress = r.progressAt(p.x);
+    // The secret run is generated a few zones ahead (between frames, so building one never stalls a
+    // frame mid-jump); the song grows with it. Only if it somehow falls far behind is it built right here.
+    const st = this.stream;
+    if (st && st.generatedX < p.x + 200) {
+      if (st.generatedX < p.x + 90) {
+        if (st.ensure(p.x, 200)) this.audio.extendSong(st.level.song);
+      } else if (!this.growing) {
+        this.growing = true;
+        setTimeout(() => {
+          this.growing = false;
+          if (this.stream === st && st.ensure(this.player.x, 200)) this.audio.extendSong(st.level.song);
+        }, 0);
+      }
+    }
     r.feed(this.world, p.x + GEN_AHEAD);
     this.world.prune(p.x - KEEP_BEHIND);
     if (p.dead) this.die();
@@ -771,6 +830,14 @@ export class Game {
       const r = this.rhythm;
       if (r.practice) {
         r.respawnT = RESPAWN_DELAY;
+        return;
+      }
+      if (this.mode === 'secret') {
+        const d = this.save.data;
+        this.rhythmNewBest = this.distance > d.secretBest;
+        d.secretBest = Math.max(d.secretBest, this.distance);
+        this.save.flush();
+        this.setState('dead');
         return;
       }
       const rec = this.levelRecord(r.index);

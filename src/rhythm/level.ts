@@ -16,7 +16,10 @@ import {
   RING_FLIP,
   SOLID,
   TRIGGER,
+  WAVE_SINE,
+  WAVE_SLAM,
   type RectKind,
+  type Wave,
 } from '../world/Rect';
 import { World } from '../world/World';
 import { STEPS_PER_BAR, compileSong, type CompiledSong, type Song } from '../audio/song';
@@ -43,6 +46,8 @@ import { STEPS_PER_BAR, compileSong, type CompiledSong, type Song } from '../aud
  *   `W`          wave portal: holding climbs diagonally, letting go dives (no inertia)
  *   `^` `v`      ship or wave: start holding / let go; the level carves a tunnel around that path
  *   `<` `=` `>` `}`  speed portals: ×0.8, ×1, ×1.25, ×1.5 the level's base speed
+ *   `z`          a saw bobbing on the floor, at its lowest when the runner passes over it (jump it)
+ *   `k`          a crusher just ahead that slams right after the runner passes (don't jump under it)
  *
  * Every ground obstacle is placed by simulation: for its shape and the level's speed we find the
  * range of press times that clear it (for a quick tap *and* a full hold, or for holds only), and
@@ -67,6 +72,10 @@ export interface LevelDef {
   guides?: boolean;
   /** Gravity levels: height of the ceiling the runner can flip onto. */
   ceiling?: number;
+  /** Finish exactly at the end of the song (pieces of the endless secret mode are stitched together). */
+  fullLength?: boolean;
+  /** Extra room (tiles) added to ship and wave tunnels, for randomly generated flights. */
+  tunnelBonus?: number;
 }
 
 export interface RectSpec {
@@ -79,6 +88,8 @@ export interface RectSpec {
   code?: number;
   /** Speed portals: the speed they set (tiles/s). */
   value?: number;
+  /** Saws and crushers (see World.addMover). */
+  mover?: { amp: number; wavelength: number; phase: number; wave: Wave; railTop: number };
 }
 
 /** A note the player should press on. */
@@ -114,17 +125,19 @@ export interface CompiledLevel {
   startT: number;
   /** Where the runner is on every beat (speed portals and tempo changes make this uneven), for the beat ticks. */
   beatX: number[];
+  /** The perfect runner at the finish (form, gravity, height). */
+  endState?: Player;
 }
 
 type Kind =
   | 's' | 'd' | 't' | 'b' | 'B' | 'p' | 'P' | 'u' | 'n' | 'j' | 'r' | 'D'
-  | 'G' | 'O' | 'C' | 'L' | 'V' | 'W' | 'f' | '^' | 'v' | '<' | '=' | '>' | '}';
-const KINDS = new Set<string>(['s', 'd', 't', 'b', 'B', 'p', 'P', 'u', 'n', 'j', 'r', 'D', 'G', 'O', 'C', 'L', 'V', 'W', 'f', '^', 'v', '<', '=', '>', '}']);
+  | 'G' | 'O' | 'C' | 'L' | 'V' | 'W' | 'f' | '^' | 'v' | '<' | '=' | '>' | '}' | 'z' | 'k';
+const KINDS = new Set<string>(['s', 'd', 't', 'b', 'B', 'p', 'P', 'u', 'n', 'j', 'r', 'D', 'G', 'O', 'C', 'L', 'V', 'W', 'f', '^', 'v', '<', '=', '>', '}', 'z', 'k']);
 /** Speed portal multipliers of the level's base speed. */
 const SPEED_MULT: Record<string, number> = { '<': 0.8, '=': 1, '>': 1.25, '}': 1.5 };
 /** Presses that need the runner on a surface (a jump, or a ball flip). */
-const GROUND_PRESS = new Set<Kind>(['s', 'd', 't', 'b', 'B', 'p', 'P', 'u', 'f']);
-const CUBE_KINDS = new Set<Kind>(['s', 'd', 't', 'b', 'B', 'p', 'P', 'u', 'n', 'j', 'r', 'O']);
+const GROUND_PRESS = new Set<Kind>(['s', 'd', 't', 'b', 'B', 'p', 'P', 'u', 'f', 'z']);
+const CUBE_KINDS = new Set<Kind>(['s', 'd', 't', 'b', 'B', 'p', 'P', 'u', 'n', 'j', 'r', 'O', 'z', 'k']);
 const HOLD_KINDS = new Set<Kind>(['t', 'B', 'P']);
 
 /** How long the simulated perfect player keeps the button down (steps). */
@@ -242,6 +255,11 @@ const WORLD_ORIGIN = -20;
 function buildWorld(world: World, rects: readonly RectSpec[]): void {
   world.reset(WORLD_ORIGIN);
   for (const r of rects) {
+    if (r.mover) {
+      const m = r.mover;
+      world.addMover(r.x0, r.y0, r.x1, r.y1, m.amp, m.wavelength, m.phase, m.wave, m.railTop);
+      continue;
+    }
     const rect = world.add(r.x0, r.y0, r.x1, r.y1, r.kind);
     rect.code = r.code ?? 0;
     if (r.value !== undefined) rect.amp = r.value;
@@ -290,6 +308,8 @@ function shape(kind: Kind, speed: number): { rects: RectSpec[]; holes: [number, 
     Array.from({ length: n }, (_, i) => ({ x0: i + SPIKE_HIT_INSET, y0: 0, x1: i + 1 - SPIKE_HIT_INSET, y1: SPIKE_HIT_HEIGHT, kind: HAZARD }));
   switch (kind) {
     case 's': return { rects: spikes(1), holes: [], len: 1 };
+    // A saw at rest on the floor when the runner is right above it, rising to either side.
+    case 'z': return { rects: [{ x0: 0.2, y0: 0, x1: 0.8, y1: 0.6, kind: HAZARD, mover: { amp: 1.3, wavelength: 6, phase: 0, wave: WAVE_SINE, railTop: 2.3 } }], holes: [], len: 1 };
     case 'd': return { rects: spikes(2), holes: [], len: 2 };
     case 't': return { rects: spikes(3), holes: [], len: 3 };
     case 'b': return { rects: [{ x0: 0, y0: 0, x1: 3, y1: 1, kind: SOLID }], holes: [], len: 3 };
@@ -403,7 +423,7 @@ export function compileLevel(def: LevelDef): CompiledLevel {
   const events = chartEvents(def.song);
   const lastStep = events.length ? events[events.length - 1]!.step : 0;
   // Finish two bars after the last obstacle (or at the end of the song).
-  const endStep = Math.min(song.totalSteps, (Math.floor(lastStep / STEPS_PER_BAR) + 3) * STEPS_PER_BAR);
+  const endStep = def.fullLength ? song.totalSteps : Math.min(song.totalSteps, (Math.floor(lastStep / STEPS_PER_BAR) + 3) * STEPS_PER_BAR);
   const endT = song.stepTimes[endStep]!;
   const worldEnd = speed * 1.6 * endT + 80;
 
@@ -442,7 +462,7 @@ export function compileLevel(def: LevelDef): CompiledLevel {
   };
   /** Solid walls above and below the recorded flight, leaving some room around it. */
   const carveTunnel = (toX: number, form: string): void => {
-    const margin = form === 'wave' ? WAVE_MARGIN : TUNNEL_MARGIN;
+    const margin = (form === 'wave' ? WAVE_MARGIN : TUNNEL_MARGIN) + (def.tunnelBonus ?? 0);
     const c0 = Math.ceil(shipFrom + 1.5);
     for (let c = c0; c + 1 <= toX - 0.5; c++) {
       let lo = Infinity;
@@ -478,7 +498,7 @@ export function compileLevel(def: LevelDef): CompiledLevel {
     const flying = p.form === 'ship' || p.form === 'wave';
     if ((kind === '^' || kind === 'v') && !flying) fail(`"${kind}" needs the ship or wave form`, ev.step);
     if ('GOCLVWf'.includes(kind) && ceil === null) fail(`"${kind}" needs a level with a ceiling`, ev.step);
-    if ((kind === 'u' || kind === 'n' || kind === 'j') && flipped) fail(`"${kind}" is not available upside down`, ev.step);
+    if ((kind === 'u' || kind === 'n' || kind === 'j' || kind === 'z') && flipped) fail(`"${kind}" is not available upside down`, ev.step);
     if (GROUND_PRESS.has(kind) && !p.grounded && !p.canJump) {
       // A ground jump (or ball flip) must start from a surface: the chart asked for one while still airborne.
       fail(`"${kind}" at ${t.toFixed(2)} s comes before the previous jump has landed`, ev.step);
@@ -492,6 +512,11 @@ export function compileLevel(def: LevelDef): CompiledLevel {
       discos++;
     } else if (kind === 'G') {
       portal(x, flipped ? PORTAL_GRAVITY_UP : PORTAL_GRAVITY_DOWN);
+    } else if (kind === 'k') {
+      if (flipped || ceil !== null) fail('"k" (crusher) needs open sky and normal gravity', ev.step);
+      // Raised while the runner passes under it, slamming just behind: u = 0.5 one tile after the centre.
+      const cx = x + 4;
+      placed.push({ x0: cx - 0.8, y0: floor, x1: cx + 0.8, y1: 12, kind: HAZARD, mover: { amp: 2.8, wavelength: 8, phase: 0.5 - 1 / 8, wave: WAVE_SLAM, railTop: 12 } });
     } else if (kind in SPEED_MULT) {
       placed.push({ x0: x + PLAYER_HALF_WIDTH, y0: -3, x1: x + PLAYER_HALF_WIDTH + 0.6, y1: (ceil ?? 8) + 3, kind: TRIGGER, code: PORTAL_SPEED, value: speed * SPEED_MULT[kind]! });
     } else if (kind === 'C' || kind === 'L' || kind === 'V' || kind === 'W') {
@@ -554,7 +579,9 @@ export function compileLevel(def: LevelDef): CompiledLevel {
   if (p.form === 'ship' || p.form === 'wave') carveTunnel(endX + 30, p.form);
 
   const rects = [...prof.surface(worldEnd), ...prof.extra, ...placed].sort((a, b) => a.x0 - b.x0);
-  const level: CompiledLevel = { def, song, speed, rects, presses, checkpoints: [], endX, endT, discos, startT, beatX: [] };
+  const endState = new Player();
+  endState.copyFrom(p);
+  const level: CompiledLevel = { def, song, speed, rects, presses, checkpoints: [], endX, endT, discos, startT, beatX: [], endState };
   const res = runPerfect(level, { recordCheckpoints: true, beatX: level.beatX });
   if (!res.ok) throw new Error(`${def.id}: perfect run fails at ${res.t.toFixed(2)} s (x=${res.x.toFixed(1)})`);
   level.checkpoints = res.checkpoints;

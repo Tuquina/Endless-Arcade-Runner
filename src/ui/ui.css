@@ -478,9 +478,16 @@
   .panel {
     gap: 0.4rem;
   }
-  .menu-skin,
   .hint {
     display: none;
+  }
+  /* The character stays (it hides the easter egg) but leaves the layout: a small badge in the corner. */
+  .menu-skin {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3.2rem;
+    height: 3.2rem;
   }
   .btn-primary {
     min-height: 3.4rem;
@@ -1221,4 +1228,33 @@
 .cheat-badge small {
   font-size: 0.7rem;
   font-weight: 700;
+}
+.mode-chip[hidden] {
+  display: none;
+}
+.mode-chip[data-mode='secret'] {
+  background: linear-gradient(135deg, rgba(255, 210, 63, 0.25), rgba(255, 122, 217, 0.25), rgba(53, 224, 255, 0.25));
+}
+.hud[data-mode='secret'] .hud-right .hud-rhythm {
+  display: none;
+}
+.modes {
+  flex-wrap: wrap;
+}
+.mode-chip {
+  flex: 1 1 28%;
+}
+@media (max-height: 460px) {
+  .cheat-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 0.25rem 0.7rem;
+  }
+  .cheat-badge small {
+    display: none;
+  }
+  .mode-chip {
+    min-height: 2.3rem;
+  }
 }
