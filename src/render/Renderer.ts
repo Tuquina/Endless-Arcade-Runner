@@ -213,9 +213,12 @@ export class Renderer {
     this.mark('background');
     this.drawWorld(game, px);
     this.mark('world');
-    if (!this.skip.has('fx')) game.fx.draw(ctx, this.camX, this.groundPx, scale);
+    // In the main menu the world scrolls as a backdrop only: the menu has its own character, and a
+    // second one running behind the controls would compete with it.
+    const backdrop = game.state === 'menu';
+    if (!backdrop && !this.skip.has('fx')) game.fx.draw(ctx, this.camX, this.groundPx, scale);
     this.mark('fx');
-    this.drawPlayer(game, px, py);
+    if (!backdrop) this.drawPlayer(game, px, py);
     this.mark('player');
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 

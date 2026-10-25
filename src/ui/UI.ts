@@ -111,7 +111,6 @@ export class UI {
     }
     el('cheat-badge').hidden = !g.cheats;
     if (g.state === 'menu') {
-      el('menu-best').textContent = String(g.best);
       this.refreshModes();
       this.refreshGoal();
       if (this.levelsOpen) this.refreshLevels();
@@ -329,7 +328,8 @@ export class UI {
       b.dataset.action = 'select-mode';
       b.dataset.mode = m.id;
       b.disabled = !m.available;
-      b.innerHTML = `<b>${m.name}</b><small>${m.available ? m.blurb : 'Próximamente'}</small>`;
+      b.textContent = m.tab;
+      b.setAttribute('aria-label', `${m.name}: ${m.available ? m.blurb : 'próximamente'}`);
       row.append(b);
     }
     const seg = el('diff-row');
@@ -353,9 +353,15 @@ export class UI {
     }
     const rhythm = g.musical;
     this.screens.menu.dataset.mode = g.mode;
-    el('play-label').textContent = rhythm ? 'Elegir nivel' : 'Jugar';
-    if (g.mode === 'secret') el('play-label').textContent = 'Jugar Ω';
-    el('menu-rhythm').textContent = g.mode === 'secret' ? `Récord secreto: ${g.secretBest} m` : rhythm ? `Niveles ${g.campaignDone}/${g.levels.length} · Discos ${g.campaignDiscos}/${g.levels.length * 3}` : '';
+    el('play-label').textContent = g.mode === 'secret' ? 'Jugar Ω' : rhythm ? 'Elegir nivel' : 'Jugar';
+    // One headline number per mode under the logo: what the player is chasing there.
+    el('menu-stat').innerHTML =
+      g.mode === 'secret'
+        ? `RÉCORD Ω <b>${g.secretBest} m</b>`
+        : rhythm
+          ? `NIVELES <b>${g.campaignDone}/${g.levels.length}</b> · DISCOS <b>${g.campaignDiscos}/${g.levels.length * 3}</b>`
+          : `RÉCORD <b>${g.best}</b>`;
+    el('mode-card').textContent = GAME_MODES.find((m) => m.id === g.mode)?.detail ?? '';
     for (const b of el('diff-row').querySelectorAll<HTMLElement>('.seg-btn')) {
       b.setAttribute('aria-checked', String(b.dataset.difficulty === g.difficultyId));
     }
@@ -365,18 +371,20 @@ export class UI {
   private refreshGoal(): void {
     const g = this.game;
     const next = g.nextReward;
+    const card = el('goal-card');
     if (!next) {
-      el('goal-label').textContent = '¡Todos los aspectos desbloqueados!';
+      el('goal-label').textContent = '¡Todos desbloqueados!';
       el('goal-num').textContent = '';
-      el('goal-hint').textContent = '';
       el('goal-fill').style.width = '100%';
+      card.setAttribute('aria-label', 'Aspectos: todos desbloqueados');
       return;
     }
     const value = Math.min(g.progressOf(next), next.goal.n);
-    el('goal-label').textContent = `Próximo: ${next.name}`;
-    el('goal-num').textContent = `${value} / ${next.goal.n} ${GOAL_UNIT[next.goal.type]}`;
-    el('goal-hint').textContent = goalText(next.goal);
+    const num = `${value}/${next.goal.n} ${GOAL_UNIT[next.goal.type]}`;
+    el('goal-label').textContent = `Próximo: ${next.name} · ${goalText(next.goal)}`;
+    el('goal-num').textContent = num;
     el('goal-fill').style.width = `${(value / next.goal.n) * 100}%`;
+    card.setAttribute('aria-label', `Aspectos. Próximo: ${next.name}, ${goalText(next.goal)} (${num})`);
     this.menuPreview?.setSkin(g.skin);
   }
 

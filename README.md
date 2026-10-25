@@ -83,6 +83,16 @@ Océano sierras, Bosque plataformas y techos, Vacío prensas. Después de 2400 m
 métrica de justicia mide la ventana *decisiva* de salto (≥150 ms con la hitbox real, que es más chica que el
 dibujo), así que ya no exigen el píxel exacto.
 
+### Menú principal
+
+Pensado primero para el celular y para jugar con una mano. Arriba quedan los ajustes (engranaje) y, si está
+activo, la píldora del modo secreto. En el centro, el personaje (que también esconde el easter egg), el logo y el
+dato principal de cada modo: récord, niveles y discos, o récord Ω. Abajo, al alcance del pulgar, van las pestañas
+de modo, un espacio de alto fijo (dificultad en *Sin fin*, descripción en los demás), **Jugar** y la tarjeta de
+**Aspectos** con el progreso hacia el próximo. Como ese espacio no cambia de alto, cambiar de modo nunca mueve
+Jugar. En horizontal se reparte en dos columnas, y en pantallas muy bajas se oculta primero la ayuda de controles.
+Mientras el menú está abierto, el mundo de fondo corre sin el personaje, para no duplicar el del menú.
+
 ### Modos y dificultades
 
 El menú elige el **modo de juego** (*Sin fin*, *Ritmo* o *Gravedad*, ver abajo) y la **dificultad** del modo sin fin, con récord
@@ -228,7 +238,7 @@ largos.
 
 Tocar **11 veces seguidas al personaje del menú** (sin pausas de más de ~0,65 s) activa el *modo secreto*: todos
 los aspectos y todos los niveles quedan disponibles **solo durante la sesión** (`sessionStorage`; nada se escribe
-en el guardado). El menú muestra un cartel "Modo secreto activo" que lo desactiva y vuelve al progreso real; el
+en el guardado). El menú suma la pestaña **Ω** y una píldora "Ω Secreto ✕" arriba a la izquierda que lo desactiva y vuelve al progreso real; el
 progreso hecho mientras tanto (récords, monedas, niveles completados) sí se guarda.
 
 Con el modo secreto activo aparece un cuarto modo, **Ω Secreto**: una carrera **infinita y procedural** que usa todo
@@ -255,7 +265,7 @@ copos, píxeles…). Se desbloquean con objetivos de varios tipos, así que no t
 | Prensas pasadas | 25 Glitch |
 | Ritmo y Gravedad | 2 niveles DJ · 12 discos Bola disco · 8 niveles Maestro |
 
-Los objetivos se cumplen en el momento (aviso en pantalla y guardado inmediato), el menú muestra el aspecto más
-cercano a completarse, y las metas de distancia aparecen como puertas doradas en el mundo.
+Los objetivos se cumplen en el momento (aviso en pantalla y guardado inmediato), la tarjeta Aspectos del menú muestra el
+aspecto más cercano a completarse, y las metas de distancia aparecen como puertas doradas en el mundo.
 Un aspecto es un dato en `src/core/skins.ts`; `src/render/PlayerView.ts` sabe dibujar los patrones, caras y
 accesorios, y los previews del menú usan ese mismo código. Para agregar uno basta una entrada nueva en `SKINS`.
