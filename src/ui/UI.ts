@@ -39,6 +39,12 @@ export class UI {
   private readonly countdownEl = el('countdown');
   private readonly hudScore = el('hud-score');
   private readonly hudBest = el('hud-best');
+  private readonly hudDist = el('hud-dist');
+  private readonly hudGoal = el('hud-goal');
+  private goalPreview: SkinPreview | null = null;
+  private lastGoalTarget: Skin | null = null;
+  private lastGoalValue = -1;
+  private lastDist = -1;
   private readonly hudCoins = el('hud-coins');
   private readonly hudLevel = el('hud-level');
 
@@ -61,6 +67,7 @@ export class UI {
     game.onUnlock = (skin) => this.showToast(skin);
     this.buildSkins();
     this.menuPreview = new SkinPreview(el<HTMLCanvasElement>('menu-skin'), game.skin);
+    this.goalPreview = new SkinPreview(el<HTMLCanvasElement>('hud-goal-skin'), game.skin);
     this.refreshToggles();
     this.sync();
   }
@@ -140,6 +147,7 @@ export class UI {
   private fillDead(): void {
     const g = this.game;
     el('dead-score').textContent = String(g.score);
+    el('dead-dist').textContent = String(g.distance);
     el('dead-best').textContent = String(g.best);
     el('dead-coins').textContent = String(g.coins);
     el('dead-record').hidden = !g.newRecord;
@@ -241,6 +249,11 @@ export class UI {
       this.lastBest = best;
       this.hudBest.textContent = String(best);
     }
+    if (g.distance !== this.lastDist) {
+      this.lastDist = g.distance;
+      this.hudDist.textContent = String(g.distance);
+    }
+    this.updateGoalPill();
     if (g.coins !== this.lastCoins) {
       this.lastCoins = g.coins;
       this.hudCoins.textContent = String(g.coins);
@@ -250,6 +263,32 @@ export class UI {
       this.hudLevel.textContent = String(g.level);
     }
     this.updateCountdown();
+  }
+
+  /** Live progress towards the skin closest to being earned (same bar as the menu, in miniature). */
+  private updateGoalPill(): void {
+    const g = this.game;
+    const target = g.goalTarget;
+    if (target !== this.lastGoalTarget) {
+      this.lastGoalTarget = target;
+      this.lastGoalValue = -1;
+      this.hudGoal.hidden = !target;
+      if (target) {
+        el('hud-goal-label').textContent = target.name;
+        this.goalPreview?.setSkin(target);
+        this.goalPreview?.fit();
+        this.goalPreview?.tick(0.001); // one still frame is enough for a 30 px icon
+      }
+    }
+    if (!target) return;
+    const value = Math.min(g.goalProgress, target.goal.n);
+    if (value !== this.lastGoalValue) {
+      this.lastGoalValue = value;
+      const num = el('hud-goal-num');
+      num.textContent = `${value} / ${target.goal.n}`;
+      num.dataset.unit = ` ${GOAL_UNIT[target.goal.type]}`; // shown by CSS, dropped on very narrow screens
+      el('hud-goal-fill').style.width = `${(value / target.goal.n) * 100}%`;
+    }
   }
 
   private updateCountdown(): void {

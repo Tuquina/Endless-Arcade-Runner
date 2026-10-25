@@ -293,11 +293,107 @@
   font-variant-numeric: tabular-nums;
   text-shadow: 0 0.06em 0 rgba(0, 0, 0, 0.35);
 }
-.hud-best {
-  margin-top: 0.25rem;
+.hud-sub {
+  margin-top: 0.3rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.7rem;
   font-size: 0.8rem;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.hud-dist {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.55rem 0.1rem 0.35rem;
+  border-radius: 99px;
+  background: rgba(18, 12, 46, 0.5);
+  color: var(--ink);
+  font-weight: 800;
+}
+.hud-dist b {
+  font-size: 1.05rem;
+}
+.hud-dist svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: var(--green);
+}
+.hud-best {
+  letter-spacing: 0.1em;
+}
+/* Live progress towards the next skin: the same bar as the menu, in miniature. */
+.hud-goal {
+  margin-top: 0.4rem;
+  display: grid;
+  grid-template-columns: 1.9rem minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 0.45rem;
+  row-gap: 0.15rem;
+  align-items: center;
+  /* Never wider than the space left of the coin counter and pause button. */
+  width: min(13.5rem, calc(100vw - 8.6rem));
+  padding: 0.3rem 0.5rem 0.35rem 0.3rem;
+  border-radius: 0.8rem;
+  background: rgba(18, 12, 46, 0.5);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.12);
+}
+.hud-goal[hidden] {
+  display: none;
+}
+.hud-goal-skin {
+  grid-row: 1 / span 2;
+  width: 1.9rem;
+  height: 1.9rem;
+  display: block;
+}
+.hud-goal-text {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.hud-goal-text {
+  min-width: 0;
+}
+.hud-goal-text > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hud-goal-text b {
+  flex: none;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+.hud-goal-text b::after {
+  content: attr(data-unit);
+}
+@media (max-width: 360px) {
+  .hud-goal-text b::after {
+    content: none;
+  }
+}
+.hud-goal-bar {
+  display: block;
+  height: 0.32rem;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+.hud-goal-bar b {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--green), var(--gold));
+  transition: width 0.12s linear;
 }
 .hud-right {
   display: flex;

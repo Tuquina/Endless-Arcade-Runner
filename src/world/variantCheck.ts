@@ -3,7 +3,8 @@ import { Rng } from '../core/Rng';
 import { reactionTime, speedAt } from './Difficulty';
 import { SegmentBuilder } from './SegmentBuilder';
 import type { Prefab } from './segments/types';
-import { analyze, solve } from './Solver';
+import { solve } from './Solver';
+import { analyze } from './windows';
 import { BUCKETS, D_STEP, bucketD, variantSeed } from './variants';
 import { World } from './World';
 
@@ -13,8 +14,8 @@ import { World } from './World';
  * on which sub-step the runner lands on, so such knife-edge variants must be rejected.
  */
 export const CHECK_MARGIN = 0.3;
-/** Narrowest acceptable jump window (ms) measured with the inflated hitbox (true windows are wider). */
-export const MIN_WINDOW_MS = 100;
+/** Narrowest acceptable decisive jump window (ms), measured with the inflated hitbox and three hold lengths; the fairness tests then demand 150 ms with the true hitbox. */
+export const MIN_WINDOW_MS = 130;
 const HOLDS = [0, 0.1, 0.2];
 /**
  * Landing spots closer than this to the first obstacle are excused: from there nothing could be

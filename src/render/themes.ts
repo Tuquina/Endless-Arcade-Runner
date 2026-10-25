@@ -45,9 +45,9 @@ function mix(a: number, b: number, t: number): number {
  * when to rebuild cached gradients.
  */
 export class ThemeBlender {
-  readonly c: Record<ColorKey, string> = {
+  readonly c: Record<ColorKey | 'groundDeep', string> = {
     skyTop: '', skyBottom: '', far: '', mid: '', ground: '', groundTop: '',
-    block: '', blockTop: '', spike: '', pit: '',
+    block: '', blockTop: '', spike: '', pit: '', groundDeep: '',
   };
   version = 0;
   /** Indices and blend of the two worlds currently on screen (for per-world decorations). */
@@ -78,6 +78,8 @@ export class ThemeBlender {
     const ta = THEMES[a]!;
     const tb = THEMES[b]!;
     for (const k of KEYS) this.c[k] = hex(mix(ta[k], tb[k], this.t));
+    // Deeper layers of the ground are the same hue, much darker.
+    this.c.groundDeep = hex(mix(mix(ta.ground, tb.ground, this.t), 0x0b0620, 0.62));
     this.version++;
   }
 }

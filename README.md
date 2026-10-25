@@ -78,6 +78,17 @@ Cada mundo (400 m, con su propia paleta) favorece unos obstáculos: Neón pincho
 Océano sierras, Bosque plataformas y techos, Vacío prensas. Después de 2400 m, la *presión* sigue subiendo
 (descansos más cortos, más gauntlets) aunque la velocidad ya esté al máximo.
 
+**Pinchos seguidos:** los tríos de pinchos solo aparecen con algo de dificultad (≥0,4; los cuádruples ≥0,9) y la
+métrica de justicia mide la ventana *decisiva* de salto (≥150 ms con la hitbox real, que es más chica que el
+dibujo), así que ya no exigen el píxel exacto.
+
+### Suelo y HUD
+
+El suelo (`src/render/Ground.ts`) tiene franja de profundidad, estratos y piedras con parallax, un borde superior
+con luz, vegetación animada por mundo y paredes en los pozos. Si los cuadros se mantienen lentos (celular
+débil) baja solo a una versión sin decoración y vuelve cuando se recupera. En partida el HUD muestra los metros
+en vivo y el progreso hacia la próxima skin.
+
 ### Obstáculos móviles y por qué siempre se pueden pasar
 
 El movimiento de una sierra o una prensa depende de **la posición del corredor** (no de un reloj), así que cada

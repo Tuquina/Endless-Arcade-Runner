@@ -28,9 +28,14 @@ export const STEP_UP = 0.2;
 /** Falling below this y means the player dropped into a pit. */
 export const DEATH_Y = -4;
 
-/** Spike hitbox is a shrunken box inside the triangle so collisions match what the eye sees. */
-export const SPIKE_HIT_INSET = 0.22;
-export const SPIKE_HIT_HEIGHT = 0.6;
+/**
+ * Spike hitbox is a box that fits entirely inside the drawn triangle (the triangle is 0.5 wide at
+ * 0.5 high, the box is 0.44 wide), so a hit is always visibly a hit and never a graze. Narrower and
+ * lower than the old 0.56 × 0.6 on purpose: a run of three spikes was only passable inside a window
+ * of a few milliseconds at low speed.
+ */
+export const SPIKE_HIT_INSET = 0.28;
+export const SPIKE_HIT_HEIGHT = 0.5;
 
 /** Horizontal speed (tiles/s) at difficulty 0 and 1. */
 export const SPEED_MIN = 7;

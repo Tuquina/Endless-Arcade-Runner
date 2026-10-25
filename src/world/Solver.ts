@@ -111,7 +111,7 @@ function flyUntilLanding(c: Player, world: World, hold: number, endX: number, sp
 }
 
 /** Coast (no input) until grounded. */
-function fall(c: Player, world: World, endX: number, speedAt: (x: number) => number): boolean {
+export function fall(c: Player, world: World, endX: number, speedAt: (x: number) => number): boolean {
   for (let i = 0; i < MAX_AIR_STEPS; i++) {
     c.speed = speedAt(c.x);
     c.step(STEP, false, false, world);
@@ -119,99 +119,4 @@ function fall(c: Player, world: World, endX: number, speedAt: (x: number) => num
     if (c.x >= endX || c.grounded) return true;
   }
   return false;
-}
-
-export interface Analysis {
-  /** Every grounded position from the start up to `leadEnd` can still finish (arrival state doesn't matter). */
-  allStartsOk: boolean;
-  /** Simply running through (never pressing) survives. */
-  walkFinish: boolean;
-  /** Longest contiguous stretch (ms) in which pressing jump still leads to a finished segment. */
-  windowMs: number;
-}
-
-/**
- * Exhaustive analysis of one segment with the real physics, memoised so the whole state graph is
- * explored once. It answers the questions the generator needs before it trusts a variant that has
- * random timing: can the runner finish from *wherever* it lands in the lead-in, and how wide is the
- * moment in which a jump works (the same "press window" the fairness tests measure)?
- */
-export function analyze(
-  world: World,
-  startX: number,
-  leadEnd: number,
-  endX: number,
-  speed: number,
-  margin: number,
-  holds: readonly number[],
-): Analysis {
-  const memo = new Map<number, boolean>();
-  const sp = (): number => speed;
-  // With a constant speed, x is exactly startX + n * speed * STEP, so the step index n identifies a
-  // position with no rounding at all.
-  const stepLen = speed * STEP;
-  const key = (p: Player): number =>
-    (Math.round((p.x - startX) / stepLen) * 128 + Math.round(p.y * 8) + 32) * 16 + Math.round(p.coyoteLeft * 100);
-
-  const canFinish = (s: Player): boolean => {
-    if (s.x >= endX) return true;
-    const k = key(s);
-    const hit = memo.get(k);
-    if (hit !== undefined) return hit;
-    memo.set(k, false);
-    let ok = false;
-    const w = new Player();
-    w.copyFrom(s);
-    w.speed = speed;
-    w.step(STEP, false, false, world);
-    if (!w.dead) {
-      if (w.x >= endX) ok = true;
-      else if (w.canJump) ok = canFinish(w);
-      else if (fall(w, world, endX, sp)) ok = canFinish(w);
-    }
-    if (!ok && s.canJump) {
-      for (const h of holds) {
-        const l = tryJump(s, world, h, endX, sp);
-        if (l && canFinish(l)) {
-          ok = true;
-          break;
-        }
-      }
-    }
-    memo.set(k, ok);
-    return ok;
-  };
-
-  const p = new Player();
-  p.reset(startX);
-  p.margin = margin;
-  p.speed = speed;
-
-  const walker = new Player();
-  walker.copyFrom(p);
-  while (!walker.dead && walker.x < endX) walker.step(STEP, false, false, world);
-  const walkFinish = !walker.dead;
-
-  let allStartsOk = true;
-  let best = 0;
-  let run = 0;
-  while (!p.dead && p.x < endX) {
-    if (p.canJump) {
-      if (p.x <= leadEnd && !canFinish(p)) allStartsOk = false;
-      let jumpOk = false;
-      for (const h of holds) {
-        const l = tryJump(p, world, h, endX, sp);
-        if (l && canFinish(l)) {
-          jumpOk = true;
-          break;
-        }
-      }
-      if (jumpOk) {
-        run++;
-        best = Math.max(best, run);
-      } else run = 0;
-    }
-    p.step(STEP, false, false, world);
-  }
-  return { allStartsOk, walkFinish, windowMs: best * STEP * 1000 };
 }

@@ -78,6 +78,12 @@ export class Particles {
     }
   }
 
+  /** A small puff kicked up by the runner's feet while it runs. */
+  run(x: number, y: number): void {
+    if (this.density < 0.5 && Math.random() < 0.5) return;
+    this.spawn(P_DUST, x, y + 0.04, -2.2 - Math.random() * 1.5, 0.3 + Math.random() * 0.6, 0.3 + Math.random() * 0.15, 0.06 + Math.random() * 0.05, C_WHITE);
+  }
+
   /** Expanding ring + dust sprayed sideways; stronger for harder landings. */
   land(x: number, y: number, impact: number): void {
     const power = Math.min(1, impact / 20);

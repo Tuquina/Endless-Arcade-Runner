@@ -74,7 +74,10 @@ export class Game {
   crushers = 0;
   private moverIdx = 0;
   private current: Skin = findSkin(DEFAULT_SKIN);
+  /** The skin shown in the HUD progress pill: the one closest to being earned, counting this run. */
+  goalTarget: Skin | null = null;
   private trailTick = 0;
+  private runTick = 0;
   private readonly generator = new Generator(this.world);
   private readonly input: Input;
   private readonly renderer: Renderer;
@@ -157,6 +160,25 @@ export class Game {
     return { distance: d.maxDist, coins: d.coins, attempts: d.attempts, saws: d.saws, crushers: d.crushers };
   }
 
+  /** Pick the skin for the HUD progress pill (called when a run starts and whenever one is unlocked). */
+  private refreshGoalTarget(): void {
+    this.goalTarget = nextSkin(this.save.data.unlocked, this.liveProgress());
+  }
+
+  /** Live value of the HUD target's objective (this run included), without allocating. */
+  get goalProgress(): number {
+    const t = this.goalTarget;
+    if (!t) return 0;
+    const d = this.save.data;
+    switch (t.goal.type) {
+      case 'distance': return this.distance;
+      case 'coins': return d.coins + this.coins;
+      case 'attempts': return d.attempts;
+      case 'saws': return d.saws + this.saws;
+      case 'crushers': return d.crushers + this.crushers;
+    }
+  }
+
   /** Saved totals plus the run in progress, so objectives complete the moment they are met. */
   private liveProgress(): Progress {
     const d = this.save.data;
@@ -174,6 +196,7 @@ export class Game {
     d.unlocked = reconcileUnlocked(d.unlocked, this.savedProgress());
     if (!d.unlocked.includes(d.skin)) d.skin = DEFAULT_SKIN;
     this.refreshDistanceGoal();
+    this.refreshGoalTarget();
     this.applySkin();
   }
 
@@ -198,6 +221,7 @@ export class Game {
       this.onUnlock?.(skin);
     }
     this.refreshDistanceGoal();
+    this.refreshGoalTarget();
     this.save.flush(); // don't lose the reward if the tab is closed mid-run
   }
 
@@ -247,6 +271,7 @@ export class Game {
     this.save.data.attempts++;
     this.setState('playing');
     this.checkUnlocks(); // "play N games" objectives
+    this.refreshGoalTarget();
   }
 
   /** Start a new run right away (from the menu or after dying). */
@@ -356,6 +381,8 @@ export class Game {
       this.view.land(p.landSpeed);
     }
     if ((!p.grounded || this.current.trail?.ground) && ++this.trailTick % 5 === 0) this.fx.trail(p.x - 0.2, p.y + (p.grounded ? 0.15 : 0.4));
+    // Skins that already leave a ground trail don't need the plain dust on top of it.
+    if (p.grounded && !this.current.trail?.ground && ++this.runTick % 8 === 0) this.fx.run(p.x - 0.35, p.y);
   }
 
   private collectCoins(): void {

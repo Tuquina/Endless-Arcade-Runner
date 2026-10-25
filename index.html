@@ -23,7 +23,18 @@
       <div id="hud" class="hud" data-show="false">
         <div class="hud-left">
           <div id="hud-score" class="hud-score">0</div>
-          <div class="hud-best">RÉCORD <span id="hud-best">0</span></div>
+          <div class="hud-sub">
+            <span class="hud-dist" aria-label="Distancia recorrida">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4h2v1h11l-2.2 4.2L18 13.5H7V21H5Z" /></svg>
+              <b id="hud-dist">0</b> m
+            </span>
+            <span class="hud-best">RÉCORD <span id="hud-best">0</span></span>
+          </div>
+          <div id="hud-goal" class="hud-goal" hidden>
+            <canvas id="hud-goal-skin" class="hud-goal-skin" aria-hidden="true"></canvas>
+            <span class="hud-goal-text"><span id="hud-goal-label"></span><b id="hud-goal-num"></b></span>
+            <i class="hud-goal-bar"><b id="hud-goal-fill"></b></i>
+          </div>
         </div>
         <div class="hud-right">
           <div class="chips">
@@ -74,7 +85,7 @@
           <p id="dead-unlock" class="record-badge unlock-badge" hidden></p>
           <p class="dead-label">Puntuación</p>
           <p id="dead-score" class="dead-score">0</p>
-          <p class="dead-meta">Récord <b id="dead-best">0</b> · <i class="coin-dot"></i> <b id="dead-coins">0</b></p>
+          <p class="dead-meta"><b id="dead-dist">0</b> m · Récord <b id="dead-best">0</b> · <i class="coin-dot"></i> <b id="dead-coins">0</b></p>
           <p id="dead-next" class="dead-next"></p>
           <button class="btn btn-primary btn-xl" data-action="retry">Reintentar</button>
           <button class="btn btn-ghost" data-action="menu">Menú principal</button>
