@@ -34,6 +34,18 @@ describe('Save', () => {
     expect(new Save(fake(JSON.stringify({ music: 'no' }))).data.music).toBe(true);
   });
 
+  it('keeps the earned secret level for good, also across tabs', () => {
+    const st = fake();
+    const a = new Save(st);
+    expect(a.data).toMatchObject({ secretEarned: false, secretSeen: false });
+    const stale = new Save(st); // another tab, loaded before the unlock
+    a.data.secretEarned = true;
+    a.flush();
+    stale.flush();
+    expect(new Save(st).data.secretEarned).toBe(true);
+    expect(new Save(fake(JSON.stringify({ secretEarned: 'yes' }))).data.secretEarned).toBe(false);
+  });
+
   it('keeps the disco sound of the music modes, soft by default', () => {
     const st = fake();
     const a = new Save(st);

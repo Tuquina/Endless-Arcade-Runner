@@ -24,7 +24,7 @@ export const GAME_MODES: readonly ModeInfo[] = [
   { id: 'endless', name: 'Sin fin', tab: 'Sin fin', blurb: 'Corré lo más lejos', detail: '', available: true },
   { id: 'rhythm', name: 'Ritmo', tab: 'Ritmo', blurb: 'Niveles musicales', detail: '8 canciones originales: saltá al compás.', available: true },
   { id: 'gravity', name: 'Gravedad', tab: 'Gravedad', blurb: 'Clásicos al revés', detail: 'Clásicos con portales, nave y piso al revés.', available: true },
-  /** Only shown while the easter egg is active (see Game.cheats). */
+  /** Shown once earned by finishing the whole game, or while the easter egg is on (Game.secretOpen). */
   { id: 'secret', name: 'Ω Secreto', tab: 'Ω', blurb: 'Infinito, con todo', detail: 'Infinito y al azar, con todas las mecánicas.', available: true },
 ];
 
