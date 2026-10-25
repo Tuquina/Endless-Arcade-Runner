@@ -226,6 +226,13 @@ export class AudioSystem {
   songTime(): number | null {
     const ctx = this.ctx;
     if (!ctx || !this.song || ctx.state !== 'running') return null;
+    // Prefer the output timestamp: it pairs the sample being heard with a high-resolution clock, so
+    // the estimate moves smoothly between the audio clock's coarse ticks (and includes output latency).
+    const ts = (ctx as AudioContext & { getOutputTimestamp?: () => AudioTimestamp }).getOutputTimestamp?.();
+    if (ts && ts.contextTime && ts.performanceTime) {
+      const heard = ts.contextTime + (performance.now() - ts.performanceTime) / 1000;
+      return this.songOffset + (heard - this.songAnchor) - this.latencyMs / 1000;
+    }
     const out = (ctx as AudioContext & { outputLatency?: number }).outputLatency || ctx.baseLatency || 0;
     return this.songOffset + (ctx.currentTime - this.songAnchor) - out - this.latencyMs / 1000;
   }

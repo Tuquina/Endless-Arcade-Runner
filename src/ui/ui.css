@@ -393,7 +393,7 @@
   width: 0;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--green), var(--gold));
-  transition: width 0.12s linear;
+  transition: transform 0.12s linear;
 }
 .hud-right {
   display: flex;
@@ -1257,4 +1257,13 @@
   .mode-chip {
     min-height: 2.3rem;
   }
+}
+
+/* In-game bars change every few frames: scale them on the compositor instead of re-laying out the HUD. */
+.hud-progress b,
+.hud-goal-bar b {
+  width: 100% !important;
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
 }

@@ -100,7 +100,7 @@ export class Game {
   private runTick = 0;
   private readonly generator = new Generator(this.world);
   private readonly input: Input;
-  private readonly renderer: Renderer;
+  readonly renderer: Renderer;
   private readonly loop: Loop;
   private readonly poll = { pressed: false, held: false };
   deadTime = 0;
@@ -120,7 +120,13 @@ export class Game {
     this.input = new Input(canvas);
     this.renderer = new Renderer(canvas);
     this.loop = new Loop(
-      (dt) => this.update(dt),
+      (dt) => {
+        const prof = this.renderer.prof;
+        if (!prof) return this.update(dt);
+        const t = performance.now();
+        this.update(dt);
+        prof.update = (prof.update ?? 0) + performance.now() - t;
+      },
       (alpha, frameDt) => {
         this.syncClock();
         this.fps += (1 / Math.max(frameDt, 1e-4) - this.fps) * 0.05;
@@ -334,10 +340,23 @@ export class Game {
         r.waiting = false;
         this.loop.shift(Math.min(d, 0.05));
       }
+      this.clockErr = 0;
       return;
     }
-    if (Math.abs(d) > 0.002) this.loop.shift(Math.max(-0.03, Math.min(0.03, d * 0.5)));
+    // A big jump (tab hiccup, audio glitch) is fixed at once…
+    if (Math.abs(d) > 0.08) {
+      this.loop.shift(Math.max(-0.1, Math.min(0.1, d)));
+      this.clockErr = 0;
+      return;
+    }
+    // …but everyday drift is filtered and corrected by at most 1.5 ms a frame. The audio clock advances
+    // in coarse ticks; chasing every tick made the scrolling stutter by a few pixels.
+    this.clockErr += (d - this.clockErr) * 0.08;
+    if (Math.abs(this.clockErr) > 0.004) this.loop.shift(Math.max(-0.0015, Math.min(0.0015, this.clockErr * 0.15)));
   }
+
+  /** Filtered difference between the music and the simulation (s). */
+  private clockErr = 0;
 
   get difficultyId(): DifficultyId {
     return this.save.data.difficulty;

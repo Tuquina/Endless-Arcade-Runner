@@ -24,6 +24,16 @@ const MAX_PIXELS = 4_200_000;
 const GROUND_DEPTH = -1;
 
 const DASH: number[] = [10, 10];
+/** Quality steps, best first: internal resolution factor and whether the ground keeps its animated details. */
+const QUALITY: readonly { res: number; lite: boolean }[] = [
+  { res: 1, lite: false },
+  { res: 0.8, lite: false },
+  { res: 0.8, lite: true },
+  { res: 0.66, lite: true },
+];
+/** Average frame time above which quality steps down (≈ 46 fps), and below which it may step back up. */
+const SLOW_FRAME = 0.0215;
+const FAST_FRAME = 0.0175;
 /** Portal colours and labels by code. */
 const PORTAL_STYLE: Record<number, { color: string; label: string; hint: string }> = {
   [PORTAL_GRAVITY_UP]: { color: '#ffd23f', label: '↓', hint: 'GRAVEDAD NORMAL' },
@@ -58,25 +68,48 @@ export class Renderer {
   private readonly theme = new ThemeBlender();
   private readonly ground = new GroundPainter();
   /**
-   * Adaptive quality: if frames stay slow for a while (a weak phone) the ground drops its decoration;
-   * if they get fast again for a longer while it comes back. Thresholds sit below 30 fps so a
-   * display capped at 30 Hz is not mistaken for a struggling device.
+   * Adaptive quality. Drawing is limited by how many pixels get filled, so when frames stay slow
+   * (a weak phone) the canvas renders at a lower internal resolution (the browser scales it up) and
+   * then drops the animated ground decoration; when they are fast again for a while it climbs back.
+   * A level that proved too much right after climbing back becomes the ceiling for the session.
    */
-  lite = false;
+  private quality = 0;
+  private maxQuality = 0;
+  private upgradedAt = -1e9;
+  private clock = 0;
+  get lite(): boolean {
+    return QUALITY[this.quality]!.lite;
+  }
   private frameEma = 1 / 60;
   private slowFor = 0;
   private fastFor = 0;
   private skyGrad: CanvasGradient | null = null;
   private skyVersion = -1;
   private readonly visible: Rect[] = [];
+  private readonly roof: Rect[] = [];
   /** The first portal of each kind in the current level gets a hint above it. */
   private firstPortals = new Map<number, number>();
   private firstPortalsOf: unknown = null;
   /** Rhythm mode: 0..1 flash on every beat (scaled by the section's energy). */
   private pulse = 0;
+  /** `?prof`: milliseconds spent per part of the frame (summed), to find what is slow. */
+  readonly prof: Record<string, number> | null = new URLSearchParams(location.search).has('prof') ? {} : null;
+  private profT = 0;
+
+  private readonly skip = new Set((new URLSearchParams(location.search).get('skip') ?? '').split(','));
+
+  private mark(name: string): void {
+    const p = this.prof;
+    if (!p) return;
+    const t = performance.now();
+    p[name] = (p[name] ?? 0) + (t - this.profT);
+    this.profT = t;
+  }
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d', { alpha: false })!;
+    const q = Number(new URLSearchParams(location.search).get('q'));
+    if (q > 0) this.quality = Math.min(QUALITY.length - 1, Math.floor(q));
     new ResizeObserver(() => this.resize()).observe(canvas);
     // Moving the window to a screen with another pixel density changes DPR without resizing the canvas.
     window.addEventListener('resize', () => this.resize());
@@ -88,7 +121,7 @@ export class Renderer {
     const cssH = Math.max(1, this.canvas.clientHeight);
     // Crisp on dense phone screens, but never more pixels than a mid-range GPU fills comfortably
     // (a 4K monitor at 2x would otherwise be an 8-megapixel canvas).
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(MAX_PIXELS / (cssW * cssH)));
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(MAX_PIXELS / (cssW * cssH))) * QUALITY[this.quality]!.res;
     this.w = Math.max(1, Math.round(cssW * this.dpr));
     this.h = Math.max(1, Math.round(cssH * this.dpr));
     this.canvas.width = this.w;
@@ -99,18 +132,37 @@ export class Renderer {
   }
 
   private trackPerformance(dt: number): void {
+    this.clock += dt;
     this.frameEma += (dt - this.frameEma) * 0.05;
-    if (this.frameEma > 0.036) {
+    if (this.frameEma > SLOW_FRAME) {
       this.slowFor += dt;
       this.fastFor = 0;
-    } else if (this.frameEma < 0.025) {
+    } else if (this.frameEma < FAST_FRAME) {
       this.fastFor += dt;
       this.slowFor = 0;
     } else {
       this.slowFor = this.fastFor = 0;
     }
-    if (!this.lite && this.slowFor > 1.5) this.lite = true;
-    else if (this.lite && this.fastFor > 8) this.lite = false;
+    if (this.lockedQuality) return;
+    if (this.slowFor > 1.2 && this.quality < QUALITY.length - 1) {
+      // Stepping down soon after stepping up: that level is too much for this device.
+      if (this.clock - this.upgradedAt < 10) this.maxQuality = this.quality + 1;
+      this.setQuality(this.quality + 1);
+    } else if (this.fastFor > 6 && this.quality > this.maxQuality) {
+      this.upgradedAt = this.clock;
+      this.setQuality(this.quality - 1);
+    }
+  }
+
+  /** `?q=N` (debug/benchmarks): pin the quality level. */
+  private readonly lockedQuality = new URLSearchParams(location.search).has('q');
+
+  private setQuality(q: number): void {
+    const res = QUALITY[this.quality]!.res;
+    this.quality = q;
+    this.slowFor = this.fastFor = 0;
+    this.frameEma = 1 / 60;
+    if (QUALITY[q]!.res !== res) this.resize();
   }
 
   private X(x: number): number {
@@ -123,12 +175,16 @@ export class Renderer {
 
   render(game: Game, alpha: number, frameDt: number, fps: number): void {
     if (frameDt > 0 && frameDt < 0.2) this.trackPerformance(frameDt);
+    if (this.prof) {
+      this.profT = performance.now();
+      this.prof.frames = (this.prof.frames ?? 0) + 1;
+    }
     const { ctx, scale } = this;
     const p = game.player;
     const px = p.prevX + (p.x - p.prevX) * alpha;
     const py = p.prevY + (p.y - p.prevY) * alpha;
     this.camX = px - this.viewW * PLAYER_SCREEN_X;
-    this.groundPx = this.h * GROUND_SCREEN_Y;
+    this.groundPx = Math.round(this.h * GROUND_SCREEN_Y);
 
     // Rhythm levels keep one world's palette for the whole song.
     // (The secret run cycles through every world as it goes, like the endless runner.)
@@ -152,14 +208,15 @@ export class Renderer {
     const sh = game.shake * scale * 0.35;
     ctx.setTransform(1, 0, 0, 1, Math.sin(game.time * 91) * sh, Math.cos(game.time * 77) * sh);
 
+    this.mark('setup');
     this.drawBackground(game);
-    if (this.pulse > 0.02) {
-      ctx.fillStyle = `rgba(255,255,255,${(0.07 * this.pulse).toFixed(3)})`;
-      ctx.fillRect(-40, -40, this.w + 80, this.groundPx + 40);
-    }
+    this.mark('background');
     this.drawWorld(game, px);
-    game.fx.draw(ctx, this.camX, this.groundPx, scale);
+    this.mark('world');
+    if (!this.skip.has('fx')) game.fx.draw(ctx, this.camX, this.groundPx, scale);
+    this.mark('fx');
     this.drawPlayer(game, px, py);
+    this.mark('player');
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     if (game.flash > 0) {
@@ -179,47 +236,164 @@ export class Renderer {
     this.bannerT = Math.max(0, this.bannerT - frameDt);
     this.drawBanner(game);
     if (game.debug) this.drawDebug(game, fps);
+    this.mark('overlay');
   }
 
   // ---------------------------------------------------------------- background
 
   private drawBackground(game: Game): void {
-    const { ctx, scale, w, h, groundPx } = this;
+    const { ctx, w, groundPx } = this;
     const c = this.theme.c;
     const pad = 40; // covers screen shake
     ctx.fillStyle = this.skyGrad!;
     ctx.fillRect(-pad, -pad, w + 2 * pad, groundPx + pad);
-    ctx.fillStyle = c.pit;
-    ctx.fillRect(-pad, groundPx, w + 2 * pad, h - groundPx + pad);
+    // (Below the horizon the ground texture covers everything; pits paint their own dark.)
 
-    this.drawDecor(game);
+    if (!this.skip.has('decor')) this.drawDecor(game);
+    if (this.skip.has('hills')) return;
+    // Far mountains (slow) and the mid skyline (faster): periodic silhouettes painted once into
+    // textures and copied 1:1 every frame (filling paths each frame is what costs).
+    this.ensureBackdrop(c.far, c.mid);
+    this.blitLayer(this.farTile!, this.camX * 0.12, groundPx);
+    this.blitLayer(this.midTile!, this.camX * 0.3, groundPx);
+  }
 
-    // Far mountains (slow) — pointed silhouettes from two summed sines.
-    ctx.fillStyle = c.far;
-    ctx.beginPath();
-    ctx.moveTo(-pad, groundPx);
-    const step = Math.max(6, Math.round(scale * 0.25));
-    for (let sx = -pad; sx <= w + pad; sx += step) {
-      const wx = sx / scale + this.camX * 0.12;
-      const m = Math.abs(Math.sin(wx * 0.23 + 1.3)) * 0.6 + Math.abs(Math.sin(wx * 0.11)) * 0.4;
-      ctx.lineTo(sx, groundPx - (1.6 + 3.4 * m) * scale);
+  private farTile: HTMLCanvasElement | null = null;
+  private midTile: HTMLCanvasElement | null = null;
+  private backdropKey = '';
+
+  private ensureBackdrop(far: string, mid: string): void {
+    const s = this.scale;
+    const key = `${this.theme.version}:${s}`;
+    if (key === this.backdropKey && this.farTile) return;
+    this.backdropKey = key;
+    // Period in tiles of parallax space; halved on huge canvases to keep the textures small.
+    const P = s * 40 <= 4096 ? 40 : 20;
+    const make = (old: HTMLCanvasElement | null, hTiles: number): [HTMLCanvasElement, CanvasRenderingContext2D] => {
+      const cv = old ?? document.createElement('canvas');
+      cv.width = Math.round(P * s);
+      cv.height = Math.ceil(hTiles * s);
+      const g = cv.getContext('2d')!;
+      g.clearRect(0, 0, cv.width, cv.height);
+      return [cv, g];
+    };
+    const [farCv, fg] = make(this.farTile, 5.1);
+    this.farTile = farCv;
+    fg.fillStyle = far;
+    fg.beginPath();
+    fg.moveTo(0, farCv.height);
+    const k1 = (Math.PI * 2 * (P / 20)) / P;
+    const k2 = (Math.PI * 2) / P;
+    for (let x = 0; x <= farCv.width; x += 4) {
+      const u = x / s;
+      const m = Math.abs(Math.sin(u * k1 + 1.3)) * 0.6 + Math.abs(Math.sin(u * k2)) * 0.4;
+      fg.lineTo(x, farCv.height - (1.6 + 3.4 * m) * s);
     }
-    ctx.lineTo(w + pad, groundPx);
-    ctx.closePath();
-    ctx.fill();
+    fg.lineTo(farCv.width, farCv.height);
+    fg.closePath();
+    fg.fill();
 
-    // Mid skyline (faster) — columns of varying height, one path, one fill.
-    ctx.fillStyle = c.mid;
-    ctx.beginPath();
-    const cell = 1.7;
-    const off = this.camX * 0.3;
-    const first = Math.floor(off / cell) - 1;
-    const last = Math.ceil((off + this.viewW) / cell) + 1;
-    for (let i = first; i <= last; i++) {
+    const [midCv, mg] = make(this.midTile, 3.5);
+    this.midTile = midCv;
+    mg.fillStyle = mid;
+    mg.beginPath();
+    const cell = P / Math.round(P / 1.7);
+    for (let i = 0; i < Math.round(P / 1.7); i++) {
       const bh = 0.8 + 2.6 * hash(i);
-      ctx.rect((i * cell - off) * scale, groundPx - bh * scale, cell * scale * 0.86, bh * scale);
+      mg.rect(i * cell * s, midCv.height - bh * s, cell * s * 0.86, bh * s);
     }
-    ctx.fill();
+    mg.fill();
+  }
+
+  private blockTile: HTMLCanvasElement | null = null;
+  private blockFill: CanvasPattern | null = null;
+  private blockKey = '';
+  private blockMatrix = new DOMMatrix();
+
+  /**
+   * A one-tile texture for blocks in the current world (bevelled panel with its own motif), as a
+   * repeating pattern aligned to the world grid so neighbouring blocks line up.
+   */
+  private blockPattern(): CanvasPattern | string {
+    const s = Math.max(4, Math.round(this.scale));
+    const key = `${this.theme.version}:${s}`;
+    if (key !== this.blockKey || !this.blockFill) {
+      this.blockKey = key;
+      const c = this.theme.c;
+      const cv = this.blockTile ?? document.createElement('canvas');
+      this.blockTile = cv;
+      cv.width = cv.height = s;
+      const g = cv.getContext('2d')!;
+      g.fillStyle = c.block;
+      g.fillRect(0, 0, s, s);
+      // Bevel: light top-left, dark bottom-right, and a thin seam between tiles.
+      const b = Math.max(2, s * 0.08);
+      g.fillStyle = 'rgba(255,255,255,0.22)';
+      g.fillRect(0, 0, s, b);
+      g.fillRect(0, 0, b, s);
+      g.fillStyle = 'rgba(0,0,0,0.22)';
+      g.fillRect(0, s - b, s, b);
+      g.fillRect(s - b, 0, b, s);
+      g.fillStyle = 'rgba(0,0,0,0.12)';
+      g.fillRect(s * 0.18, s * 0.18, s * 0.64, s * 0.64);
+      g.strokeStyle = c.blockTop;
+      g.globalAlpha = 0.55;
+      g.lineWidth = Math.max(1, s * 0.04);
+      const world = this.theme.t < 0.5 ? this.theme.a : this.theme.b;
+      g.beginPath();
+      if (world === 0) {
+        // Neon: a glowing inner frame.
+        g.rect(s * 0.25, s * 0.25, s * 0.5, s * 0.5);
+      } else if (world === 1) {
+        // Dusk: bricks.
+        g.moveTo(0, s / 2);
+        g.lineTo(s, s / 2);
+        g.moveTo(s / 2, b);
+        g.lineTo(s / 2, s / 2);
+      } else if (world === 2) {
+        // Ocean: portholes.
+        g.moveTo(s * 0.68, s / 2);
+        g.arc(s / 2, s / 2, s * 0.18, 0, 6.283);
+      } else if (world === 3) {
+        // Forest: wood grain.
+        g.moveTo(s * 0.2, s * 0.3);
+        g.quadraticCurveTo(s * 0.5, s * 0.22, s * 0.8, s * 0.32);
+        g.moveTo(s * 0.2, s * 0.62);
+        g.quadraticCurveTo(s * 0.5, s * 0.7, s * 0.8, s * 0.6);
+      } else {
+        // Void: a diamond rune.
+        g.moveTo(s / 2, s * 0.25);
+        g.lineTo(s * 0.75, s / 2);
+        g.lineTo(s / 2, s * 0.75);
+        g.lineTo(s * 0.25, s / 2);
+        g.closePath();
+      }
+      g.stroke();
+      g.globalAlpha = 1;
+      this.blockFill = this.ctx.createPattern(cv, 'repeat');
+    }
+    const pat = this.blockFill;
+    if (!pat) return this.theme.c.block;
+    // Align the pattern with the world grid (x = 0 and the ground line), at the current zoom.
+    const k = this.scale / s;
+    const m = this.blockMatrix;
+    m.a = k;
+    m.b = 0;
+    m.c = 0;
+    m.d = k;
+    m.e = this.X(0);
+    m.f = this.groundPx;
+    pat.setTransform(m);
+    return pat;
+  }
+
+  /** Copy a periodic layer across the screen at parallax position `pos` (tiles), resting on `base`. */
+  private blitLayer(tile: HTMLCanvasElement, pos: number, base: number): void {
+    const tw = tile.width;
+    let phase = Math.floor(pos * this.scale) % tw;
+    if (phase < 0) phase += tw;
+    const y = base - tile.height;
+    for (let x = -phase - tw; x < this.w + 40; x += tw) this.ctx.drawImage(tile, x, y);
   }
 
   /** Per-world ambience, cross-faded by the theme blend so nothing pops on transition. */
@@ -289,36 +463,39 @@ export class Renderer {
     game.world.collect(this.camX - 1, this.camX + this.viewW + 1, vis);
 
     // Ground: depth gradient, strata, lit lip, cliff edges and the living decoration of each world.
-    this.ground.draw(ctx, vis, this.theme, game.time, this.camX, scale, this.groundPx, this.w, this.h, GROUND_DEPTH, this.lite);
+    this.mark('collect');
+    if (!this.skip.has('ground')) this.ground.draw(ctx, vis, this.theme, game.time, this.camX, scale, this.groundPx, this.w, this.h, GROUND_DEPTH, this.lite || this.skip.has('lite'), this.pulse);
+    // Ceiling slabs (gravity levels), mirrored ground with life hanging from it.
+    const roof = this.roof;
+    roof.length = 0;
+    for (let i = 0; i < vis.length; i++) if (vis[i]!.kind === SOLID && vis[i]!.y1 >= 12) roof.push(vis[i]!);
+    if (roof.length) {
+      roof.sort((a, b) => a.x0 - b.x0);
+      this.ground.drawCeilings(ctx, roof, this.theme, game.time, this.camX, scale, Math.round(this.Y(roof[0]!.y0)), this.w, this.lite, this.pulse);
+    }
+    this.mark('ground');
 
-    // Blocks and floating platforms.
+    // Blocks and floating platforms: one fill each with a world-aligned texture (cached per world).
+    const blockFill = this.blockPattern();
+    const capH = Math.max(3, scale * 0.12);
     for (let i = 0; i < vis.length; i++) {
       const r = vis[i]!;
       if (r.kind !== SOLID || r.y0 <= GROUND_DEPTH) continue;
-      if (r.y1 >= 12) {
-        this.drawCeiling(r);
-        continue;
-      }
+      if (r.y1 >= 12) continue; // ceilings are painted with the ground
       const x = this.X(r.x0);
       const y = this.Y(r.y1);
       const wpx = (r.x1 - r.x0) * scale;
       const hpx = (r.y1 - r.y0) * scale;
-      ctx.fillStyle = c.block;
+      ctx.fillStyle = blockFill;
       ctx.fillRect(x, y, wpx, hpx);
-      ctx.strokeStyle = 'rgba(0,0,0,0.18)';
-      ctx.lineWidth = Math.max(1, scale * 0.03);
-      ctx.beginPath();
-      for (let gx = r.x0 + 1; gx < r.x1 - 0.01; gx++) {
-        ctx.moveTo(this.X(gx), y);
-        ctx.lineTo(this.X(gx), y + hpx);
-      }
-      for (let gy = r.y1 - 1; gy > r.y0 + 0.01; gy--) {
-        ctx.moveTo(x, this.Y(gy));
-        ctx.lineTo(x + wpx, this.Y(gy));
-      }
-      ctx.stroke();
       ctx.fillStyle = c.blockTop;
-      ctx.fillRect(x, y, wpx, Math.max(3, scale * 0.12));
+      ctx.fillRect(x, y, wpx, capH);
+      if (this.pulse > 0.05) {
+        ctx.globalAlpha = this.pulse * 0.5;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x, y, wpx, capH * 0.6);
+        ctx.globalAlpha = 1;
+      }
     }
 
     // Movers: drawn at the height the runner will find them (their motion is locked to its x).
@@ -473,24 +650,6 @@ export class Renderer {
     ctx.beginPath();
     ctx.arc(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, scale * 0.06, 0, 6.283);
     ctx.fill();
-  }
-
-  /** Ceiling slab of a gravity level: a dark band with a lit underside the runner can walk on. */
-  private drawCeiling(r: Rect): void {
-    const { ctx, scale } = this;
-    const c = this.theme.c;
-    const x = this.X(r.x0);
-    const wpx = (r.x1 - r.x0) * scale + 1;
-    const bottom = this.Y(r.y0);
-    ctx.fillStyle = c.mid;
-    ctx.fillRect(x, -40, wpx, bottom + 40);
-    // Faint bands that scroll with the slab, so the ceiling reads as a surface and shows speed.
-    ctx.fillStyle = c.far;
-    for (let gx = Math.ceil(r.x0 / 2) * 2; gx < r.x1; gx += 2) ctx.fillRect(this.X(gx), -40, Math.max(2, scale * 0.12), bottom + 40);
-    ctx.fillStyle = c.ground;
-    ctx.fillRect(x, bottom - scale * 0.35, wpx, scale * 0.35);
-    ctx.fillStyle = c.groundTop;
-    ctx.fillRect(x, bottom - Math.max(3, scale * 0.12), wpx, Math.max(3, scale * 0.12));
   }
 
   /** Gravity and form portals: a tall glowing oval with the symbol of what it does. */
@@ -935,7 +1094,7 @@ export class Renderer {
     ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
     ctx.fillText(
-      `${fps.toFixed(0)} fps  v=${p.speed.toFixed(1)}  d=${game.difficulty.toFixed(2)}  world=${THEMES[this.theme.a]!.name}${this.lite ? ' LITE' : ''}`,
+      `${fps.toFixed(0)} fps  v=${p.speed.toFixed(1)}  d=${game.difficulty.toFixed(2)}  world=${THEMES[this.theme.a]!.name} q${this.quality}${this.lite ? ' LITE' : ''}`,
       this.w - 8,
       8,
     );
