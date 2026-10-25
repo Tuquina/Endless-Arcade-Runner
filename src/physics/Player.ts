@@ -14,15 +14,33 @@ import {
   SHIP_ACCEL,
   SHIP_MAX_SPEED,
   DEATH_TOP,
+  WAVE_SLOPE,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
   STEP_UP,
   TERMINAL_VELOCITY,
 } from './constants';
-import { HAZARD, PAD, PORTAL_BALL, PORTAL_CUBE, PORTAL_GRAVITY_DOWN, PORTAL_GRAVITY_UP, PORTAL_SHIP, RING, RING_FLIP, SOLID, TRIGGER } from '../world/Rect';
+import {
+  HAZARD,
+  PAD,
+  PORTAL_BALL,
+  PORTAL_CUBE,
+  PORTAL_GRAVITY_DOWN,
+  PORTAL_GRAVITY_UP,
+  PORTAL_SHIP,
+  PORTAL_SPEED,
+  PORTAL_WAVE,
+  RING,
+  RING_FLIP,
+  SOLID,
+  TRIGGER,
+} from '../world/Rect';
 
-/** How the button acts: jump (cube), flip gravity on a surface (ball), or fly while held (ship). */
-export type Form = 'cube' | 'ball' | 'ship';
+/**
+ * How the button acts: jump (cube), flip gravity on a surface (ball), fly while held (ship), or zigzag
+ * diagonally, up while held and down when released (wave).
+ */
+export type Form = 'cube' | 'ball' | 'ship' | 'wave';
 import type { World } from '../world/World';
 
 /**
@@ -141,7 +159,7 @@ export class Player {
     if (world.special) this.touchSpecials(world, hw, h);
 
     // --- The button: jump (cube), flip gravity (ball); the ship reads `held` below. ---
-    if (this.form !== 'ship' && this.buffer > 0 && this.coyote > 0) {
+    if ((this.form === 'cube' || this.form === 'ball') && this.buffer > 0 && this.coyote > 0) {
       if (this.form === 'ball') {
         this.g = -g;
         this.vy = -this.g * BALL_KICK;
@@ -188,7 +206,11 @@ export class Player {
     const up = this.g;
     const wasGrounded = this.grounded;
     const impact = this.vy;
-    if (this.form === 'ship') {
+    if (this.form === 'wave') {
+      // No inertia: the direction follows the button instantly.
+      this.vy = (held ? 1 : -1) * up * WAVE_SLOPE * this.speed;
+      this.jumping = false;
+    } else if (this.form === 'ship') {
       // Flight: holding pushes up, releasing lets it sink, both with a capped speed.
       this.vy += (held ? 1 : -1) * up * SHIP_ACCEL * dt;
       this.vy = Math.max(-SHIP_MAX_SPEED, Math.min(SHIP_MAX_SPEED, this.vy));
@@ -256,7 +278,14 @@ export class Player {
         this.form = 'ship';
         this.jumping = false;
         break;
+      case PORTAL_WAVE:
+        this.form = 'wave';
+        this.jumping = false;
+        break;
+      case PORTAL_SPEED:
+        this.speed = t.amp;
+        break;
     }
-    if (this.form !== 'ship' && Math.abs(this.vy) > TERMINAL_VELOCITY) this.vy = Math.sign(this.vy) * TERMINAL_VELOCITY;
+    if ((this.form === 'cube' || this.form === 'ball') && Math.abs(this.vy) > TERMINAL_VELOCITY) this.vy = Math.sign(this.vy) * TERMINAL_VELOCITY;
   }
 }

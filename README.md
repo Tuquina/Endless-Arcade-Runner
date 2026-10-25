@@ -176,6 +176,20 @@ grabaciones de terceros (`src/rhythm/gravityLevels.ts`):
 | 2 | Can-Can | Offenbach, *Galop infernal* (1858) | electro galop, 150 BPM | **bola**: cada toque la cambia de piso a techo |
 | 3 | Rey de la Montaña | Grieg, *Peer Gynt* (1875) | trap, 140 BPM | **nave**: mantené para subir, soltá para bajar |
 
+Y dos niveles **extremos** con temas originales compuestos para el juego (sin derechos de terceros):
+
+| # | Nivel | Estilo y tempo | Qué tiene |
+|---|---|---|---|
+| 4 | Voltaje | electro house en Fa menor, 150 → 120 (pausa) → 160 BPM | todas las formas, portales de velocidad, **onda** |
+| 5 | Hipervelocidad | drum & bass en Re menor, 140 → 160 → 174 (con medio tiempo) → 180 BPM | aceleración continua hasta ×1,5 de velocidad |
+
+Para estos dos se sumó al motor: **tempo por sección** (el mapa de tiempos de cada semicorchea lo usan la música,
+el chart y la sincronía), **portales de velocidad** (`<` ×0,8, `=` ×1, `>` ×1,25, `}` ×1,5) y la forma **onda**
+(`W`): sube en diagonal mientras mantenés y baja al soltar, sin inercia, en pasillos más angostos que los de la
+nave. Se buscaron temas modernos "sin copyright": NCS solo es gratis para videos (un juego necesita su licencia
+comercial) y los de Kevin MacLeod (CC BY) se pueden usar con crédito, pero este entorno no permite descargar audio
+y transcribirlos de memoria no sería fiel; por eso los dos temas son originales.
+
 Se descartaron temas con dueño: la base de un rap de YouTuber tiene autor y no está liberada, y la melodía de
 Tetris (Korobeiniki) es popular pero la versión de videojuego está protegida por una marca sonora.
 

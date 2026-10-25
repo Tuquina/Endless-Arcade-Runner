@@ -96,10 +96,8 @@ describe('rhythm levels', () => {
 
   it('put every press exactly on the 16th-note grid', () => {
     for (const lv of compiled) {
-      for (const p of lv.presses) {
-        const steps = p.t / lv.song.stepDur;
-        expect(Math.abs(steps - Math.round(steps))).toBeLessThan(1e-9);
-      }
+      const grid = new Set(Array.from(lv.song.stepTimes, (t) => t.toFixed(9)));
+      for (const p of lv.presses) expect(grid.has(p.t.toFixed(9)), `${lv.def.id} press at ${p.t}`).toBe(true);
     }
   });
 

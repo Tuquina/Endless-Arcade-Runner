@@ -1,7 +1,7 @@
 import { SFX, type SfxEnv, type SfxName } from './sfx';
 import { LOOP_STEPS, scheduleStep, stepDuration } from './music';
 import { makeNoise } from './synth';
-import { scheduleSongStep, type CompiledSong, type SongEnv } from './song';
+import { scheduleSongStep, stepAtTime, type CompiledSong, type SongEnv } from './song';
 
 export interface AudioSettings {
   music: boolean;
@@ -193,7 +193,7 @@ export class AudioSystem {
     this.songEnv = { ctx, out: bus, noise: this.noiseBuf, echo };
     this.songOffset = offset;
     this.songAnchor = ctx.currentTime + 0.1;
-    this.songStep = Math.max(0, Math.ceil(offset / song.stepDur - 1e-6));
+    this.songStep = Math.max(0, Math.ceil(stepAtTime(song, offset) - 1e-6));
     this.songTimer = setInterval(this.songTick, TICK_MS);
     this.songTick();
     return true;
@@ -230,7 +230,8 @@ export class AudioSystem {
     const song = this.song;
     if (!ctx || !song || !this.songEnv) return;
     for (let guard = 0; guard < 64; guard++) {
-      const t = this.songAnchor + (this.songStep * song.stepDur - this.songOffset);
+      if (this.songStep >= song.totalSteps) break;
+      const t = this.songAnchor + (song.stepTimes[this.songStep]! - this.songOffset);
       if (t > ctx.currentTime + LOOKAHEAD || this.songStep >= song.totalSteps) break;
       if (t >= ctx.currentTime - 0.02) scheduleSongStep(this.songEnv, song, this.songStep, Math.max(t, ctx.currentTime));
       this.songStep++;

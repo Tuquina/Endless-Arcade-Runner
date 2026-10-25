@@ -10,6 +10,8 @@ import {
   PORTAL_GRAVITY_DOWN,
   PORTAL_GRAVITY_UP,
   PORTAL_SHIP,
+  PORTAL_SPEED,
+  PORTAL_WAVE,
   RING,
   RING_FLIP,
   SOLID,
@@ -38,7 +40,9 @@ import { STEPS_PER_BAR, compileSong, type CompiledSong, type Song } from '../aud
  *   `O`          blue ring in the air: press to flip gravity mid-air
  *   `C` `L` `V`  form portals: cube (jump), ball (a press flips gravity), ship (hold to fly)
  *   `f`          ball: flip to the other surface on this note
- *   `^` `v`      ship: start holding / let go; the level carves a tunnel around that flight path
+ *   `W`          wave portal: holding climbs diagonally, letting go dives (no inertia)
+ *   `^` `v`      ship or wave: start holding / let go; the level carves a tunnel around that path
+ *   `<` `=` `>` `}`  speed portals: ×0.8, ×1, ×1.25, ×1.5 the level's base speed
  *
  * Every ground obstacle is placed by simulation: for its shape and the level's speed we find the
  * range of press times that clear it (for a quick tap *and* a full hold, or for holds only), and
@@ -73,6 +77,8 @@ export interface RectSpec {
   kind: RectKind;
   /** Rings and portals (see RING_* / PORTAL_*). */
   code?: number;
+  /** Speed portals: the speed they set (tiles/s). */
+  value?: number;
 }
 
 /** A note the player should press on. */
@@ -106,10 +112,16 @@ export interface CompiledLevel {
   discos: number;
   /** Song time the run starts at (a short run-up before the first beat). */
   startT: number;
+  /** Where the runner is on every beat (speed portals and tempo changes make this uneven), for the beat ticks. */
+  beatX: number[];
 }
 
-type Kind = 's' | 'd' | 't' | 'b' | 'B' | 'p' | 'P' | 'u' | 'n' | 'j' | 'r' | 'D' | 'G' | 'O' | 'C' | 'L' | 'V' | 'f' | '^' | 'v';
-const KINDS = new Set<string>(['s', 'd', 't', 'b', 'B', 'p', 'P', 'u', 'n', 'j', 'r', 'D', 'G', 'O', 'C', 'L', 'V', 'f', '^', 'v']);
+type Kind =
+  | 's' | 'd' | 't' | 'b' | 'B' | 'p' | 'P' | 'u' | 'n' | 'j' | 'r' | 'D'
+  | 'G' | 'O' | 'C' | 'L' | 'V' | 'W' | 'f' | '^' | 'v' | '<' | '=' | '>' | '}';
+const KINDS = new Set<string>(['s', 'd', 't', 'b', 'B', 'p', 'P', 'u', 'n', 'j', 'r', 'D', 'G', 'O', 'C', 'L', 'V', 'W', 'f', '^', 'v', '<', '=', '>', '}']);
+/** Speed portal multipliers of the level's base speed. */
+const SPEED_MULT: Record<string, number> = { '<': 0.8, '=': 1, '>': 1.25, '}': 1.5 };
 /** Presses that need the runner on a surface (a jump, or a ball flip). */
 const GROUND_PRESS = new Set<Kind>(['s', 'd', 't', 'b', 'B', 'p', 'P', 'u', 'f']);
 const CUBE_KINDS = new Set<Kind>(['s', 'd', 't', 'b', 'B', 'p', 'P', 'u', 'n', 'j', 'r', 'O']);
@@ -126,8 +138,10 @@ const MAX_FLOOR = 3;
 /** Ball flips: how much room (tiles) is left for an early flip; the late side follows from the spike spacing. */
 const BALL_EARLY_ROOM = 2.2;
 const BALL_LATE_ROOM = 0.9;
-/** Ship tunnels: room left above and below the ideal flight path (tiles). */
+/** Ship and wave tunnels: room left above and below the ideal path (tiles). The wave has no inertia, so a
+ * timing error moves it less and its corridors can be tighter. */
 const TUNNEL_MARGIN = 1.2;
+const WAVE_MARGIN = 0.9;
 
 interface ChartEvent {
   step: number;
@@ -227,7 +241,11 @@ const WORLD_ORIGIN = -20;
 
 function buildWorld(world: World, rects: readonly RectSpec[]): void {
   world.reset(WORLD_ORIGIN);
-  for (const r of rects) world.add(r.x0, r.y0, r.x1, r.y1, r.kind).code = r.code ?? 0;
+  for (const r of rects) {
+    const rect = world.add(r.x0, r.y0, r.x1, r.y1, r.kind);
+    rect.code = r.code ?? 0;
+    if (r.value !== undefined) rect.amp = r.value;
+  }
 }
 
 /** Place a shape rect (drawn standing on floor 0) on the runner's current surface. */
@@ -364,7 +382,7 @@ interface Hold {
 /** Steps the player from step `n0` to `n1` (exclusive), pressing per `holds`. Returns the step it died on, or -1. */
 function simulate(p: Player, world: World, n0: number, n1: number, holds: readonly Hold[], path?: number[]): number {
   for (let n = n0; n < n1; n++) {
-    if (path && p.form === 'ship') path.push(p.x, p.y);
+    if (path && (p.form === 'ship' || p.form === 'wave')) path.push(p.x, p.y);
     let pressed = false;
     let held = false;
     for (const h of holds) {
@@ -386,9 +404,8 @@ export function compileLevel(def: LevelDef): CompiledLevel {
   const lastStep = events.length ? events[events.length - 1]!.step : 0;
   // Finish two bars after the last obstacle (or at the end of the song).
   const endStep = Math.min(song.totalSteps, (Math.floor(lastStep / STEPS_PER_BAR) + 3) * STEPS_PER_BAR);
-  const endT = endStep * song.stepDur;
-  const endX = speed * endT;
-  const worldEnd = endX + 60;
+  const endT = song.stepTimes[endStep]!;
+  const worldEnd = speed * 1.6 * endT + 80;
 
   const prof = new Profile();
   const ceil = def.ceiling ?? null;
@@ -423,8 +440,9 @@ export function compileLevel(def: LevelDef): CompiledLevel {
   const portal = (x: number, code: number): void => {
     placed.push({ x0: x + PLAYER_HALF_WIDTH, y0: -3, x1: x + PLAYER_HALF_WIDTH + 0.6, y1: (ceil ?? 8) + 3, kind: TRIGGER, code });
   };
-  /** Solid walls above and below the recorded flight, leaving TUNNEL_MARGIN of room around it. */
-  const carveTunnel = (toX: number): void => {
+  /** Solid walls above and below the recorded flight, leaving some room around it. */
+  const carveTunnel = (toX: number, form: string): void => {
+    const margin = form === 'wave' ? WAVE_MARGIN : TUNNEL_MARGIN;
     const c0 = Math.ceil(shipFrom + 1.5);
     for (let c = c0; c + 1 <= toX - 0.5; c++) {
       let lo = Infinity;
@@ -437,8 +455,8 @@ export function compileLevel(def: LevelDef): CompiledLevel {
         hi = Math.max(hi, shipPath[k + 1]! + 0.8);
       }
       if (lo === Infinity) continue;
-      const top = Math.floor((lo - TUNNEL_MARGIN) * 2) / 2;
-      const bottom = Math.ceil((hi + TUNNEL_MARGIN) * 2) / 2;
+      const top = Math.floor((lo - margin) * 2) / 2;
+      const bottom = Math.ceil((hi + margin) * 2) / 2;
       if (top >= 0.5) placed.push({ x0: c, y0: 0, x1: c + 1, y1: top, kind: SOLID });
       if (ceil !== null && bottom <= ceil - 0.5) placed.push({ x0: c, y0: bottom, x1: c + 1, y1: ceil, kind: SOLID });
     }
@@ -446,19 +464,20 @@ export function compileLevel(def: LevelDef): CompiledLevel {
   };
 
   for (const ev of events) {
-    const t = ev.step * song.stepDur;
+    const t = song.stepTimes[ev.step]!;
     const ns = stepOf(t);
     rebuild();
     const died = simulate(p, world, n, ns, holds, shipPath);
     if (died >= 0) fail(`perfect run dies at ${(died * STEP).toFixed(2)} s before placing "${ev.kind}"`, ev.step);
     n = ns;
-    const x = speed * ns * STEP;
+    const x = p.x;
     const kind = ev.kind;
     const flipped = p.g < 0;
     if (CUBE_KINDS.has(kind) && p.form !== 'cube') fail(`"${kind}" needs the cube form`, ev.step);
     if (kind === 'f' && p.form !== 'ball') fail('"f" needs the ball form', ev.step);
-    if ((kind === '^' || kind === 'v') && p.form !== 'ship') fail(`"${kind}" needs the ship form`, ev.step);
-    if ('GOCLVf'.includes(kind) && ceil === null) fail(`"${kind}" needs a level with a ceiling`, ev.step);
+    const flying = p.form === 'ship' || p.form === 'wave';
+    if ((kind === '^' || kind === 'v') && !flying) fail(`"${kind}" needs the ship or wave form`, ev.step);
+    if ('GOCLVWf'.includes(kind) && ceil === null) fail(`"${kind}" needs a level with a ceiling`, ev.step);
     if ((kind === 'u' || kind === 'n' || kind === 'j') && flipped) fail(`"${kind}" is not available upside down`, ev.step);
     if (GROUND_PRESS.has(kind) && !p.grounded && !p.canJump) {
       // A ground jump (or ball flip) must start from a surface: the chart asked for one while still airborne.
@@ -473,10 +492,12 @@ export function compileLevel(def: LevelDef): CompiledLevel {
       discos++;
     } else if (kind === 'G') {
       portal(x, flipped ? PORTAL_GRAVITY_UP : PORTAL_GRAVITY_DOWN);
-    } else if (kind === 'C' || kind === 'L' || kind === 'V') {
-      if (p.form === 'ship') carveTunnel(x);
-      if (kind === 'V') shipFrom = x;
-      portal(x, kind === 'C' ? PORTAL_CUBE : kind === 'L' ? PORTAL_BALL : PORTAL_SHIP);
+    } else if (kind in SPEED_MULT) {
+      placed.push({ x0: x + PLAYER_HALF_WIDTH, y0: -3, x1: x + PLAYER_HALF_WIDTH + 0.6, y1: (ceil ?? 8) + 3, kind: TRIGGER, code: PORTAL_SPEED, value: speed * SPEED_MULT[kind]! });
+    } else if (kind === 'C' || kind === 'L' || kind === 'V' || kind === 'W') {
+      if (flying) carveTunnel(x, p.form);
+      if (kind === 'V' || kind === 'W') shipFrom = x;
+      portal(x, kind === 'C' ? PORTAL_CUBE : kind === 'L' ? PORTAL_BALL : kind === 'V' ? PORTAL_SHIP : PORTAL_WAVE);
     } else if (kind === '^') {
       presses.push({ t, x, y: p.y, hold: true, until: Infinity });
       holds.push({ from: ns, to: Infinity });
@@ -507,14 +528,14 @@ export function compileLevel(def: LevelDef): CompiledLevel {
       presses.push({ t, x, y: p.y, hold: false });
       holds.push({ from: ns, to: ns + TAP_STEPS });
     } else if (kind === 'f') {
-      const w = pressWindow('f', speed, ceil!);
-      for (const r of ballShape(speed, ceil!)) placed.push(onSurface(r, x + w.lead, 0, ceil, flipped));
+      const w = pressWindow('f', p.speed, ceil!);
+      for (const r of ballShape(p.speed, ceil!)) placed.push(onSurface(r, x + w.lead, 0, ceil, flipped));
       presses.push({ t, x, y: p.y, hold: false });
       holds.push({ from: ns, to: ns + TAP_STEPS });
     } else {
-      const w = pressWindow(kind, speed);
+      const w = pressWindow(kind, p.speed);
       const start = x + w.lead;
-      const sh = shape(kind, speed);
+      const sh = shape(kind, p.speed);
       for (const r of sh.rects) placed.push(onSurface(r, start, floor, ceil, flipped));
       for (const [a, b] of sh.holes) (flipped ? prof.ceilHoles : prof.holes).push({ x0: a + start, x1: b + start });
       if (sh.raise) {
@@ -526,11 +547,15 @@ export function compileLevel(def: LevelDef): CompiledLevel {
       holds.push({ from: ns, to: ns + (hold ? HOLD_STEPS : TAP_STEPS) });
     }
   }
-  if (p.form === 'ship') carveTunnel(endX);
+  // Run the perfect player to the finish to know where it is, and close any open tunnel.
+  rebuild();
+  if (simulate(p, world, n, stepOf(endT), holds, shipPath) >= 0) fail('perfect run dies before the finish', endStep - 1);
+  const endX = p.x;
+  if (p.form === 'ship' || p.form === 'wave') carveTunnel(endX + 30, p.form);
 
   const rects = [...prof.surface(worldEnd), ...prof.extra, ...placed].sort((a, b) => a.x0 - b.x0);
-  const level: CompiledLevel = { def, song, speed, rects, presses, checkpoints: [], endX, endT, discos, startT };
-  const res = runPerfect(level, { recordCheckpoints: true });
+  const level: CompiledLevel = { def, song, speed, rects, presses, checkpoints: [], endX, endT, discos, startT, beatX: [] };
+  const res = runPerfect(level, { recordCheckpoints: true, beatX: level.beatX });
   if (!res.ok) throw new Error(`${def.id}: perfect run fails at ${res.t.toFixed(2)} s (x=${res.x.toFixed(1)})`);
   level.checkpoints = res.checkpoints;
   return level;
@@ -562,6 +587,8 @@ export interface RunOptions {
   /** Override hold lengths: all quick taps, or every press held to the max. */
   holdMode?: 'short' | 'long';
   recordCheckpoints?: boolean;
+  /** Collect the runner's x on every beat into this array. */
+  beatX?: number[];
 }
 
 /** Run a scripted player through the finished level. */
@@ -591,7 +618,8 @@ export function runPerfect(level: CompiledLevel, o: RunOptions = {}): { ok: bool
   const end = stepOf(level.endT) + 1;
   const checkpoints: Checkpoint[] = [];
   const song = level.song;
-  const sectionTimes = song.sectionStart.slice(1, -1).map((s) => s * song.stepDur).filter((t) => t < level.endT - 2);
+  const sectionTimes = song.sectionStart.slice(1, -1).map((s) => song.stepTimes[s]!).filter((t) => t < level.endT - 2);
+  let beat = 0;
   let nextCp = 0;
   let pressIdx = 0;
   let hi = 0;
@@ -603,6 +631,12 @@ export function runPerfect(level: CompiledLevel, o: RunOptions = {}): { ok: bool
     for (let i = hi; i < holds.length && holds[i]!.from <= n; i++) {
       if (holds[i]!.from === n) pressed = true;
       if (n < holds[i]!.to) held = true;
+    }
+    if (o.beatX) {
+      while (beat * 4 <= song.totalSteps && song.stepTimes[Math.min(beat * 4, song.totalSteps)]! <= n * STEP) {
+        o.beatX.push(p.x + p.speed * (song.stepTimes[Math.min(beat * 4, song.totalSteps)]! - n * STEP));
+        beat++;
+      }
     }
     p.step(STEP, pressed, held, world);
     const c = world.overlap(p.x - 0.4, p.y, p.x + 0.4, p.y + 0.8, COIN);

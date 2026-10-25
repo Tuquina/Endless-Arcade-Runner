@@ -18,6 +18,9 @@ export const PORTAL_GRAVITY_DOWN = 2;
 export const PORTAL_CUBE = 3;
 export const PORTAL_BALL = 4;
 export const PORTAL_SHIP = 5;
+export const PORTAL_WAVE = 6;
+/** Speed portal: sets the runner's speed to the portal's `amp` (tiles/s). */
+export const PORTAL_SPEED = 7;
 
 /** Motion profiles of a mover, as a function of u ∈ [0, 1) (position inside one wavelength). */
 export const WAVE_SINE = 0;

@@ -1,6 +1,6 @@
 import { PLAYER_HEIGHT } from '../physics/constants';
 import type { Game } from '../core/Game';
-import { COIN, HAZARD, PAD, PORTAL_BALL, PORTAL_CUBE, PORTAL_GRAVITY_DOWN, PORTAL_GRAVITY_UP, PORTAL_SHIP, RING, RING_FLIP, SOLID, TRIGGER, WAVE_SLAM, moverCycle, moverLift, type Rect } from '../world/Rect';
+import { COIN, HAZARD, PAD, PORTAL_BALL, PORTAL_CUBE, PORTAL_GRAVITY_DOWN, PORTAL_GRAVITY_UP, PORTAL_SHIP, PORTAL_SPEED, PORTAL_WAVE, RING, RING_FLIP, SOLID, TRIGGER, WAVE_SLAM, moverCycle, moverLift, type Rect } from '../world/Rect';
 import { Confetti } from './Confetti';
 import { hash } from './hash';
 import { GroundPainter } from './Ground';
@@ -30,6 +30,8 @@ const PORTAL_STYLE: Record<number, { color: string; label: string; hint: string 
   [PORTAL_CUBE]: { color: '#2ee6a6', label: '■', hint: 'SALTO' },
   [PORTAL_BALL]: { color: '#ff5d73', label: '●', hint: 'BOLA: TOCÁ PARA CAMBIAR DE LADO' },
   [PORTAL_SHIP]: { color: '#ff7ad9', label: '▲', hint: 'NAVE: MANTENÉ PARA SUBIR' },
+  [PORTAL_WAVE]: { color: '#35e0ff', label: '◆', hint: 'ONDA: MANTENÉ = SUBE · SOLTÁ = BAJA' },
+  [PORTAL_SPEED]: { color: '#ff9a3c', label: '»', hint: '¡VELOCIDAD!' },
 };
 const JUDGE_TEXT = { perfect: '¡PERFECTO!', good: 'BIEN', ok: 'OK', miss: '' } as const;
 const JUDGE_COLOR = { perfect: '#ffd23f', good: '#2ee6a6', ok: '#6ec1ff', miss: '#ffffff' } as const;
@@ -494,6 +496,10 @@ export class Renderer {
     const { ctx, scale } = this;
     const st = PORTAL_STYLE[r.code] ?? PORTAL_STYLE[PORTAL_CUBE]!;
     const ceil = game.rhythm.level?.def.ceiling ?? 5;
+    if (r.code === PORTAL_SPEED) {
+      this.drawSpeedPortal(r, game, ceil);
+      return;
+    }
     const cx = this.X((r.x0 + r.x1) / 2);
     const cy = this.Y(ceil / 2);
     const ry = (ceil / 2) * scale * 0.92;
@@ -533,6 +539,33 @@ export class Renderer {
     }
   }
 
+  /** Speed portal: a column of chevrons, one to three depending on how fast it makes the runner. */
+  private drawSpeedPortal(r: Rect, game: Game, ceil: number): void {
+    const { ctx, scale } = this;
+    const base = game.rhythm.level?.speed ?? r.amp;
+    const ratio = r.amp / base;
+    const n = ratio < 0.95 ? 1 : ratio < 1.1 ? 1 : ratio < 1.4 ? 2 : 3;
+    const dir = ratio < 0.95 ? -1 : 1;
+    const cx = this.X((r.x0 + r.x1) / 2);
+    const color = ratio < 0.95 ? '#6ec1ff' : ratio < 1.1 ? '#2ee6a6' : ratio < 1.4 ? '#ff9a3c' : '#ff4d6d';
+    ctx.strokeStyle = color;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = scale * 0.16;
+    const h = scale * 0.45;
+    for (let row = 0; row < 3; row++) {
+      const cy = this.Y(ceil * (0.25 + row * 0.25));
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const ox = (i - (n - 1) / 2) * scale * 0.4 * dir;
+        ctx.moveTo(cx + ox - h * 0.6 * dir, cy - h);
+        ctx.lineTo(cx + ox + h * 0.4 * dir, cy);
+        ctx.lineTo(cx + ox - h * 0.6 * dir, cy + h);
+      }
+      ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  }
+
   /** Beat ticks, jump guides, checkpoints, best-progress marker, finish line and judgement popups. */
   private drawRhythm(game: Game, runnerX: number): void {
     const { ctx, scale } = this;
@@ -542,10 +575,16 @@ export class Renderer {
     const x1 = this.camX + this.viewW + 1;
 
     // A tick on the ground for every beat, longer on the first beat of a bar.
-    const beatLen = lv.speed * lv.song.stepDur * 4;
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    for (let k = Math.max(0, Math.ceil(x0 / beatLen)); k * beatLen < x1; k++) {
-      const bx = this.X(k * beatLen);
+    const bxs = lv.beatX;
+    let k0 = 0;
+    for (let lo = 0, hi = bxs.length; lo < hi; ) {
+      const mid = (lo + hi) >> 1;
+      if (bxs[mid]! < x0) lo = k0 = mid + 1;
+      else hi = mid;
+    }
+    for (let k = k0; k < bxs.length && bxs[k]! < x1; k++) {
+      const bx = this.X(bxs[k]!);
       const bar = k % 4 === 0;
       ctx.fillRect(bx - 1, this.groundPx + scale * 0.05, 2, scale * (bar ? 0.4 : 0.2));
     }
@@ -634,7 +673,9 @@ export class Renderer {
         ctx.fillStyle = JUDGE_COLOR[pop.j];
         ctx.textAlign = 'center';
         ctx.font = `900 ${Math.round(scale * (0.42 + (pop.j === 'perfect' ? 0.12 : 0)))}px system-ui, sans-serif`;
-        ctx.fillText(JUDGE_TEXT[pop.j], this.X(runnerX), this.Y(pop.y + 2.2 + age * 1.5));
+        // Above the runner, or below it when it is up near a ceiling (so it never hides under the HUD).
+        const high = pop.y > 2;
+        ctx.fillText(JUDGE_TEXT[pop.j], this.X(runnerX), this.Y(high ? pop.y - 1.1 - age : pop.y + 2.2 + age * 1.5));
         ctx.globalAlpha = 1;
       }
     }
@@ -730,7 +771,25 @@ export class Renderer {
       ctx.translate(0, 2 * cy);
       ctx.scale(1, -1);
     }
-    if (p.form === 'ball') {
+    if (p.form === 'wave') {
+      // A dart pointing where it is heading, with a fading zigzag trail behind it.
+      this.drawWaveTrail(game, px, py);
+      const ang = Math.atan2(-p.vy * p.g, p.speed);
+      ctx.translate(cx, cy);
+      ctx.rotate(ang);
+      const s = size;
+      ctx.fillStyle = game.skin.color;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = s * 0.06;
+      ctx.beginPath();
+      ctx.moveTo(0.55 * s, 0);
+      ctx.lineTo(-0.4 * s, -0.36 * s);
+      ctx.lineTo(-0.22 * s, 0);
+      ctx.lineTo(-0.4 * s, 0.36 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else if (p.form === 'ball') {
       // A rolling wheel around the character.
       ctx.translate(cx, cy);
       ctx.rotate(px * 1.4);
@@ -780,6 +839,31 @@ export class Renderer {
   }
 
   // ---------------------------------------------------------------- overlays
+
+  private readonly waveTrail: number[] = [];
+
+  /** The wave leaves its zigzag behind (world coordinates, drawn before the flip transform). */
+  private drawWaveTrail(game: Game, px: number, py: number): void {
+    const t = this.waveTrail;
+    const n = t.length;
+    if (n >= 2 && (px < t[n - 2]! - 1 || px - t[n - 2]! > 3)) t.length = 0;
+    t.push(px, py + 0.4);
+    if (t.length > 120) t.splice(0, t.length - 120);
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.strokeStyle = game.skin.color;
+    ctx.lineWidth = Math.max(2, this.scale * 0.14);
+    ctx.lineJoin = 'round';
+    for (let i = 2; i < t.length; i += 2) {
+      ctx.globalAlpha = (i / t.length) * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(this.X(t[i - 2]!), this.Y(t[i - 1]!));
+      ctx.lineTo(this.X(t[i]!), this.Y(t[i + 1]!));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
   /** Only the in-world "new record" banner lives on the canvas; the rest of the HUD is DOM. */
   private drawBanner(game: Game): void {

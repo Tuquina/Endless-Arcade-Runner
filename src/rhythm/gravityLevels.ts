@@ -168,10 +168,119 @@ const reyMontana: Song = {
   ],
 };
 
+// ------------------------------------------------------------------ 4 · Voltaje (original)
+// Electro house / complextro in F minor. The hook is a 3-3-2 syncopation that climbs over i–VI–III–VII.
+const VOLT_HOOK =
+  '8 - - 8 - - 7 - 5 - - 5 - - 3 - | 6 - - 6 - - 5 - 3 - - 4 - - 5 - | 10 - - 10 - - 9 - 8 - - 7 - - 8 - | 7 - - 7 - - 8 - 9 - - - - - . .';
+const VOLT_HOOK_B =
+  '8 - - 8 - - 7 - 5 - - 5 - - 3 - | 6 - - 6 - - 5 - 3 - - 4 - - 5 - | 10 - - 10 - - 9 - 8 - - 7 - - 8 - | 9 - - 9 - - 10 - 12 - - - 11 - 10 -';
+const VOLT_VERSE =
+  '1 . . 3 . . 5 . 4 . 3 . 1 . . . | 6- . . 1 . . 3 . 2 . 1 . 7- . . . | 3 . . 5 . . 7 . 6 . 5 . 3 . . . | 7- . . 2 . . 4 . 5 - - - . . . .';
+
+const voltaje: Song = {
+  id: 'voltaje',
+  name: 'Voltaje',
+  bpm: 150,
+  root: 65,
+  scale: 'minor',
+  lead: 'sawtooth',
+  bass: 'sawtooth',
+  sections: [
+    sec('intro', 4, 0.3, {
+      chords: [1, 6, 3, 7], kick: K2, hat: OFF, pad: true, arp: 'up', riser: true, fill: true,
+      chart: '................|................|s.......s.......|d.......s.O.....',
+    }),
+    sec('verso', 8, 0.65, {
+      chords: [1, 6, 3, 7], kick: K4, clap: SN, hat: H16, bass: 'r.r.o.r.r.r.o.r.', arp: 'down', crash: true, lead: VOLT_VERSE,
+      chart:
+        '>.......s.......|d.......G.......|s.....s.........|b.......s.O.....|' +
+        's.......d.D.....|G.......s.r.....|s.......t.......|s.O.........L...',
+    }),
+    sec('subida', 4, 0.8, {
+      chords: [6, 7, 1, 1], kick: K4, snare: OFF, hat: H16, bass: 'r.r.r.r.r.r.r.r.', arp: 'up', fill: true, riser: true,
+      chart: 'f...f...f...f...|f...f...f...f...|f.......f...f...|f...f...V.......',
+    }),
+    sec('drop', 8, 1, {
+      chords: [1, 6, 3, 7], kick: K4, clap: SN, hat: H16, open: OFF, bass: '.rr.o.r..rr.o.r.', arp: 'up', crash: true, lead: VOLT_HOOK,
+      chart:
+        '^.....v...^...v.|..^...v...^...v.|^.....v...^.v...|^...v...^.v.W...|' +
+        '^..v..^..v..^..v|..^.v...^..v.^.v|^...v..D^..v..^.|.v..^..v....C...',
+    }),
+    sec('pausa', 4, 0.35, {
+      bpm: 120, chords: [6, 7, 1, 1], kick: K2, hat: OFF, pad: true, arp: 'updown', riser: true, fill: true,
+      lead: '8 - - - - - - - 7 - - - 5 - - - | 6 - - - - - - - - - - - . . . .',
+      chart: '<...............|s.......s.......|d.......s.r.....|p.......G.......',
+    }),
+    sec('drop 2', 8, 1, {
+      bpm: 160, chords: [1, 6, 3, 7], kick: K4, clap: SN, hat: H16, open: OFF, bass: '.rr.o.r..rr.o.r.', arp: 'up', crash: true, lead: VOLT_HOOK_B,
+      chart:
+        '>.......s.......|G.......L.......|f...f...f...f...|f...f.D.f...f...|' +
+        'f...f...W.......|^..v.^..v..^..v.|^.v..^.v..^..v..|^...v...C.......',
+    }),
+    sec('final', 4, 1, {
+      bpm: 160, chords: [1, 6, 3, 7], kick: K4, clap: SN, hat: H16, open: OFF, bass: 'r.o.r.o.r.o.r.o.', arp: 'up', crash: true, lead: VOLT_HOOK,
+      chart: '}.......s.......|s.r.....d.......|G.......s.O.....|s.......s.......',
+    }),
+    sec('outro', 2, 0.2, { bpm: 160, chords: [1], pad: true, kick: 'x...............', crash: true, lead: '8 - - - - - - - - - - - - - - -' }),
+  ],
+};
+
+// ------------------------------------------------------------------ 5 · Hipervelocidad (original)
+// Drum & bass in D minor that keeps speeding up: 140 → 160 → 174 → 180 BPM, with a half-time drop.
+const HYPER_HOOK =
+  '8 . 7 . 5 . 7 . 8 - - . 10 . 9 . | 8 . 7 . 4 . 7 . 8 - - . 11 . 10 . | 10 . 9 . 6 . 9 . 10 - - . 12 . 11 . | 9 - - - 7 - - - 8 - 9 - 10 - 12 -';
+const DNB_K = 'x.........x.....';
+const DNB_S = '....x.......x...';
+
+const hipervelocidad: Song = {
+  id: 'hipervelocidad',
+  name: 'Hipervelocidad',
+  bpm: 140,
+  root: 62,
+  scale: 'minor',
+  lead: 'square',
+  bass: 'sawtooth',
+  sections: [
+    sec('intro', 4, 0.3, {
+      chords: [1, 4, 6, 7], kick: K2, hat: OFF, pad: true, fill: true, lead: HYPER_HOOK.replace(/(\d+)/g, '$1-'),
+      chart: '................|................|s.......s.......|L...............',
+    }),
+    sec('carga', 8, 0.7, {
+      bpm: 160, chords: [1, 4, 6, 7], kick: K4, snare: OFF, hat: H16, bass: 'r.r.r.r.r.r.r.r.', arp: 'up', riser: true, fill: true, crash: true, lead: HYPER_HOOK,
+      chart:
+        'f.......f.......|f.......f...f...|f...f...f...f...|f...f...f...f...|' +
+        'f.D.f...f...f...|f...f...f...f...|f...f...f...f...|f...f...W.......',
+    }),
+    sec('drop', 8, 1, {
+      bpm: 174, chords: [1, 4, 6, 7], kick: DNB_K, snare: DNB_S, hat: H16, open: OFF, bass: 'r-r-o-r-r-o-r-f-', arp: 'up', crash: true, lead: up(HYPER_HOOK),
+      chart:
+        '>..^..v..^..v..^|..v.^..v..^..v..|^..v.^.v.^..v...|^...v...^.v.^..v|' +
+        '..^..v..^..v..^.|.v..^...v...V...|^.....v...^.....|v.D.^...v...C...',
+    }),
+    sec('medio tiempo', 4, 0.6, {
+      bpm: 174, chords: [6, 7, 1, 1], kick: 'x...............', snare: TRAP_SN, hat: OFF, bass: 'r-o-r-o-r-o-r-o-', pad: true, fill: true, riser: true,
+      lead: '8 - - - - - - - 10 - - - 9 - - - | 8 - - - - - - - - - - - . . . .',
+      chart: '....s.......s...|....d.......G...|....s.......s.O.|....b.......s...',
+    }),
+    sec('sprint', 8, 1, {
+      bpm: 180, chords: [1, 4, 6, 7], kick: DNB_K, snare: DNB_S, clap: DNB_S, hat: H16, open: OFF, bass: 'r-r-o-r-r-o-r-f-', arp: 'up', crash: true, lead: up(HYPER_HOOK),
+      chart:
+        '}...............|s.......s.r.....|d.......L.......|f...f...f...f...|' +
+        'f...f.D.f...f...|f...f...W.......|^..v..^..v..^..v|..^..v..C.......',
+    }),
+    sec('final', 4, 1, {
+      bpm: 180, chords: [1, 4, 6, 7], kick: DNB_K, snare: DNB_S, hat: H16, open: OFF, bass: 'r.o.r.o.r.o.r.o.', arp: 'up', crash: true, lead: HYPER_HOOK,
+      chart: 's.......s.......|d.......s.O.....|s.......d.......|G.......s.......',
+    }),
+    sec('outro', 2, 0.2, { bpm: 180, chords: [1], pad: true, kick: 'x...............', crash: true, lead: '1 - - - - - - - - - - - - - - -' }),
+  ],
+};
+
 export const GRAVITY_LEVELS: readonly LevelDef[] = [
   { id: 'himno-alegria', name: 'Himno de la Alegría', blurb: 'Beethoven · portales de gravedad.', song: himno, speed: 10, theme: 3, tier: 2, guides: true, ceiling: CEILING },
   { id: 'can-can', name: 'Can-Can', blurb: 'Offenbach · la bola que salta de piso a techo.', song: cancan, speed: 11, theme: 1, tier: 3, ceiling: CEILING },
-  { id: 'rey-montana', name: 'Rey de la Montaña', blurb: 'Grieg en trap · volá con la nave.', song: reyMontana, speed: 11.5, theme: 4, tier: 4, ceiling: CEILING },
+  { id: 'rey-montana', name: 'Rey de la Montaña', blurb: 'Grieg en trap · volá con la nave.', song: reyMontana, speed: 11.5, theme: 4, tier: 4, ceiling: CEILING },  { id: 'voltaje', name: 'Voltaje', blurb: 'Electro house · velocidad, onda y todo a la vez.', song: voltaje, speed: 11.5, theme: 0, tier: 5, ceiling: CEILING },
+  { id: 'hipervelocidad', name: 'Hipervelocidad', blurb: 'Drum & bass que acelera hasta 180 BPM.', song: hipervelocidad, speed: 12, theme: 2, tier: 5, ceiling: CEILING },
 ];
 
 /** Composer credits shown in the level list (public-domain works, original arrangements). */
@@ -179,4 +288,6 @@ export const GRAVITY_CREDITS: Record<string, string> = {
   'himno-alegria': 'L. v. Beethoven (1824)',
   'can-can': 'J. Offenbach (1858)',
   'rey-montana': 'E. Grieg (1875)',
+  voltaje: 'Original (2026)',
+  hipervelocidad: 'Original (2026)',
 };

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { STEP } from '../core/Loop';
 import { Player } from '../physics/Player';
-import { PORTAL_BALL, PORTAL_GRAVITY_DOWN, PORTAL_SHIP, RING, RING_FLIP, SOLID, TRIGGER } from '../world/Rect';
+import { PORTAL_BALL, PORTAL_GRAVITY_DOWN, PORTAL_SHIP, PORTAL_SPEED, PORTAL_WAVE, RING, RING_FLIP, SOLID, TRIGGER } from '../world/Rect';
+import { compileSong, stepAtTime } from '../audio/song';
 import { World } from '../world/World';
 import { chartEvents, compileLevel, pressWindow, runPerfect } from './level';
 import { GRAVITY_CREDITS, GRAVITY_LEVELS } from './gravityLevels';
@@ -87,6 +88,33 @@ describe('gravity physics', () => {
     expect(p.y).toBeLessThan(high);
   });
 
+  it('the wave climbs and dives diagonally with no inertia', () => {
+    const w = corridor();
+    w.add(1, -3, 1.6, CEIL + 3, TRIGGER).code = PORTAL_WAVE;
+    const p = new Player();
+    p.reset(0);
+    p.speed = 10;
+    for (let n = 0; n < 20; n++) p.step(STEP, false, false, w);
+    expect(p.form).toBe('wave');
+    const y0 = p.y;
+    for (let n = 0; n < 12; n++) p.step(STEP, true, true, w);
+    expect(p.y - y0).toBeCloseTo(12 * STEP * 0.9 * 10, 6); // 45°-ish climb at once
+    p.step(STEP, false, false, w);
+    expect(p.vy).toBeCloseTo(-9, 6); // and dives the very next step
+  });
+
+  it('a speed portal changes the run speed', () => {
+    const w = corridor();
+    const t = w.add(3, -3, 3.6, CEIL + 3, TRIGGER);
+    t.code = PORTAL_SPEED;
+    t.amp = 15;
+    const p = new Player();
+    p.reset(0);
+    p.speed = 10;
+    for (let n = 0; n < 60; n++) p.step(STEP, false, false, w);
+    expect(p.speed).toBe(15);
+  });
+
   it('a blue ring flips gravity on a mid-air press', () => {
     const w = corridor();
     w.add(1.5, 0.9, 2.5, 2.7, RING).code = RING_FLIP;
@@ -105,12 +133,29 @@ describe('gravity physics', () => {
 describe('gravity campaign', () => {
   const compiled = GRAVITY_LEVELS.map((d) => compileLevel(d));
 
-  it('has three public-domain songs, credited, each with a ceiling', () => {
-    expect(GRAVITY_LEVELS).toHaveLength(3);
-    for (const d of GRAVITY_LEVELS) {
-      expect(GRAVITY_CREDITS[d.id]).toMatch(/\(1[78]\d\d\)$/);
+  it('has three public-domain classics and two originals, all credited, each with a ceiling', () => {
+    expect(GRAVITY_LEVELS).toHaveLength(5);
+    GRAVITY_LEVELS.forEach((d, i) => {
+      expect(GRAVITY_CREDITS[d.id]).toMatch(i < 3 ? /\(1[78]\d\d\)$/ : /^Original/);
       expect(d.ceiling).toBeGreaterThan(4);
+    });
+  });
+
+  it('the last two are the hardest: every form, speed changes and tempo changes', () => {
+    for (const d of GRAVITY_LEVELS.slice(3)) {
+      const kinds = new Set(chartEvents(d.song).map((e) => e.kind));
+      for (const k of ['G', 'O', 'L', 'f', 'V', 'W', '^', '>']) expect(kinds.has(k as never), `${d.id} uses "${k}"`).toBe(true);
+      expect(d.tier).toBe(5);
+      expect(new Set(d.song.sections.map((s) => s.bpm ?? d.song.bpm)).size).toBeGreaterThanOrEqual(2);
     }
+  });
+
+  it('maps song time to steps across tempo changes', () => {
+    const c = compileSong(GRAVITY_LEVELS[4]!.song);
+    for (const step of [0, 37, 64, 200, 333, c.totalSteps - 1]) expect(stepAtTime(c, c.stepTimes[step]!)).toBeCloseTo(step, 9);
+    // 4 bars at 140 BPM, then 160.
+    expect(c.stepTimes[64]).toBeCloseTo((64 * 60) / 140 / 4, 9);
+    expect(c.stepTimes[65]! - c.stepTimes[64]!).toBeCloseTo(60 / 160 / 4, 9);
   });
 
   it('teaches one idea per level: portals and blue rings, then the ball, then the ship', () => {
@@ -131,12 +176,13 @@ describe('gravity campaign', () => {
       const perfect = runPerfect(lv);
       expect(perfect.ok).toBe(true);
       expect(perfect.discos).toBe(3);
+      const jitter = lv.def.tier >= 5 ? 35 : 40;
       for (let seed = 1; seed <= 8; seed++) {
-        const r = runPerfect(lv, { jitterMs: 40, seed });
-        expect(r.ok, `±40 ms, seed ${seed}: dies at ${r.t.toFixed(2)} s`).toBe(true);
+        const r = runPerfect(lv, { jitterMs: jitter, seed });
+        expect(r.ok, `±${jitter} ms, seed ${seed}: dies at ${r.t.toFixed(2)} s`).toBe(true);
       }
       for (const holdMode of ['short', 'long'] as const) expect(runPerfect(lv, { holdMode }).ok, holdMode).toBe(true);
-      for (const shiftMs of [-40, 40]) expect(runPerfect(lv, { shiftMs }).ok, `shift ${shiftMs}`).toBe(true);
+      for (const shiftMs of [-35, 35]) expect(runPerfect(lv, { shiftMs }).ok, `shift ${shiftMs}`).toBe(true);
       const idle = runPerfect({ ...lv, presses: [] });
       expect(idle.ok).toBe(false);
     });

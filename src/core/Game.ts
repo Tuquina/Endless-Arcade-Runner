@@ -597,7 +597,7 @@ export class Game {
     if (pressed) this.onJudged(r.press(r.songTime, p.x, p.y, this.time));
     r.songTime += dt;
     r.expire(r.songTime);
-    p.speed = lv.speed;
+    // Speed is set at the start and changed only by speed portals.
     p.step(dt, pressed, held, this.world);
     this.playEffects(p);
     this.collectCoins();

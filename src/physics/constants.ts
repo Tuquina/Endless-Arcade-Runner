@@ -47,6 +47,8 @@ export const SHIP_ACCEL = 42;
 export const SHIP_MAX_SPEED = 7;
 /** Flying off the top (gravity flipped over a gap in the ceiling) is a fall too. */
 export const DEATH_TOP = 16;
+/** Wave: climbs or dives diagonally at this fraction of the run speed (1 = 45°). */
+export const WAVE_SLOPE = 0.9;
 
 /** Horizontal speed (tiles/s) at difficulty 0 and 1. */
 export const SPEED_MIN = 7;
