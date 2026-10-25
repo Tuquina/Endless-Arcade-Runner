@@ -106,3 +106,20 @@ describe('Save: difficulty records', () => {
     expect(new Save(st).data.records).toMatchObject({ easy: { best: 50 }, hard: { best: 70 } });
   });
 });
+
+describe('Save: rhythm progress', () => {
+  it('stores per-level records and settings, sanitising bad input, and merges tabs', () => {
+    const st = fake();
+    const a = new Save(st);
+    const b = new Save(st);
+    a.data.rhythm['primer-pulso'] = { best: 100, done: true, acc: 92, discos: 0b101, attempts: 7 };
+    a.data.latency = 40;
+    a.flush();
+    b.data.rhythm['primer-pulso'] = { best: 60, done: false, acc: 0, discos: 0b010, attempts: 9 };
+    b.flush();
+    expect(new Save(st).data.rhythm['primer-pulso']).toEqual({ best: 100, done: true, acc: 92, discos: 0b111, attempts: 9 });
+    const bad = new Save(fake(JSON.stringify({ rhythm: { x: { best: 400, done: 'yes', discos: -1 }, y: 3 }, latency: 9999, practice: 1 })));
+    expect(bad.data.rhythm).toEqual({ x: { best: 100, done: false, acc: 0, discos: 0, attempts: 0 } });
+    expect(bad.data).toMatchObject({ latency: 250, practice: false });
+  });
+});

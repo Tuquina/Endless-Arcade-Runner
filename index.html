@@ -21,7 +21,12 @@
     <div id="ui">
       <!-- In-run HUD: only score, best and pause (plus two tiny stats). Never intercepts taps except the button. -->
       <div id="hud" class="hud" data-show="false">
-        <div class="hud-left">
+        <div class="hud-left hud-rhythm">
+          <div class="hud-track"><span id="hud-track-name"></span><b id="hud-pct">0%</b></div>
+          <i class="hud-progress"><b id="hud-progress-fill"></b></i>
+          <div class="hud-sub"><span id="hud-combo" class="hud-combo"></span><span id="hud-practice" class="hud-practice" hidden>PRÁCTICA</span></div>
+        </div>
+        <div class="hud-left hud-endless">
           <div id="hud-score" class="hud-score">0</div>
           <div class="hud-sub">
             <span class="hud-dist" aria-label="Distancia recorrida">
@@ -38,8 +43,9 @@
         </div>
         <div class="hud-right">
           <div class="chips">
-            <span class="chip"><i class="coin-dot"></i><span id="hud-coins">0</span></span>
-            <span class="chip">NV <span id="hud-level">1</span></span>
+            <span class="chip hud-endless"><i class="coin-dot"></i><span id="hud-coins">0</span></span>
+            <span class="chip hud-endless">NV <span id="hud-level">1</span></span>
+            <span class="chip hud-rhythm"><i class="disco-dot"></i><span id="hud-discos">0</span>/3</span>
           </div>
           <button id="btn-pause" class="icon-btn" aria-label="Pausa" data-action="pause">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>
@@ -60,7 +66,8 @@
             <div class="goal-bar"><i id="goal-fill"></i></div>
             <p id="goal-hint" class="goal-hint"></p>
           </div>
-          <button class="btn btn-primary" data-action="play">Jugar</button>
+          <p class="menu-rhythm" id="menu-rhythm"></p>
+          <button class="btn btn-primary" data-action="play"><span id="play-label">Jugar</span></button>
           <div class="btn-row">
             <button class="btn btn-ghost" data-action="skins">Aspectos</button>
             <button class="btn btn-ghost" data-action="settings">Ajustes</button>
@@ -96,6 +103,53 @@
         </div>
       </section>
 
+      <section id="screen-levels" class="screen" data-show="false" aria-label="Niveles de ritmo">
+        <div class="panel panel-wide">
+          <h2 class="title">Modo Ritmo</h2>
+          <p class="skins-sub">Saltá al compás: cada obstáculo cae justo en una nota. Completá un nivel para abrir el siguiente.</p>
+          <button class="toggle" role="switch" aria-checked="false" data-action="toggle-practice"><span>Práctica <small>(puntos de control, no cuenta récords)</small></span><i></i></button>
+          <div id="level-list" class="level-list"></div>
+          <button class="btn btn-ghost" data-action="back">Volver</button>
+        </div>
+      </section>
+
+      <section id="screen-rdead" class="screen" data-show="false" data-action="retry" aria-label="Fin del intento">
+        <div class="panel">
+          <p id="rdead-best-badge" class="record-badge" hidden>¡Nuevo mejor progreso!</p>
+          <p id="rdead-name" class="dead-label"></p>
+          <p id="rdead-pct" class="dead-score">0%</p>
+          <i class="rdead-bar"><b id="rdead-fill"></b></i>
+          <p class="dead-meta">Mejor <b id="rdead-best">0%</b> · Intento <b id="rdead-attempt">1</b></p>
+          <p id="rdead-tip" class="dead-next"></p>
+          <button class="btn btn-primary btn-xl" data-action="retry">Reintentar</button>
+          <div class="btn-row">
+            <button class="btn btn-ghost" data-action="levels">Niveles</button>
+            <button class="btn btn-ghost" data-action="menu">Menú</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-complete" class="screen" data-show="false" aria-label="Nivel completado">
+        <div class="panel">
+          <p id="complete-unlock" class="record-badge unlock-badge" hidden></p>
+          <p id="complete-title" class="title">¡Nivel completado!</p>
+          <div class="complete-row">
+            <div id="complete-grade" class="grade">S</div>
+            <div class="complete-stats">
+              <p><b id="complete-acc">100%</b> precisión</p>
+              <p id="complete-counts" class="complete-counts"></p>
+              <p class="complete-discos" id="complete-discos"></p>
+            </div>
+          </div>
+          <p id="complete-next-note" class="dead-next"></p>
+          <button class="btn btn-primary btn-xl" data-action="next-level" id="btn-next-level">Siguiente nivel</button>
+          <div class="btn-row">
+            <button class="btn btn-ghost" data-action="replay">Repetir</button>
+            <button class="btn btn-ghost" data-action="levels">Niveles</button>
+          </div>
+        </div>
+      </section>
+
       <section id="screen-skins" class="screen" data-show="false" aria-label="Aspectos">
         <div class="panel panel-wide">
           <h2 class="title">Aspectos</h2>
@@ -110,6 +164,14 @@
           <h2 class="title">Ajustes</h2>
           <button class="toggle" role="switch" aria-checked="true" data-action="toggle-music"><span>Música</span><i></i></button>
           <button class="toggle" role="switch" aria-checked="true" data-action="toggle-sfx"><span>Efectos</span><i></i></button>
+          <div class="calib">
+            <span>Sincronía del ritmo <small>Si saltás a tiempo y la música suena antes o después (por ejemplo, con auriculares Bluetooth), ajustalo.</small></span>
+            <div class="calib-ctl">
+              <button class="icon-btn" data-action="latency-minus" aria-label="Menos desfase">−</button>
+              <b id="latency-val">0 ms</b>
+              <button class="icon-btn" data-action="latency-plus" aria-label="Más desfase">+</button>
+            </div>
+          </div>
           <button class="btn btn-ghost" data-action="back">Volver</button>
         </div>
       </section>

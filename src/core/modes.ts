@@ -4,12 +4,13 @@
  *
  * Adding a mode: extend `GameMode`, add an entry to `GAME_MODES` (flip `available` on once it is
  * playable) and branch on `Game.mode` where its rules differ. Difficulty (see world/Difficulty.ts) is
- * a property of the endless mode only; a level-based mode brings its own notion of challenge.
+ * a property of the endless mode only; the rhythm mode is a campaign of fixed levels (rhythm/levels.ts)
+ * that brings its own notion of challenge.
  */
-export type GameMode = 'endless';
+export type GameMode = 'endless' | 'rhythm';
 
 export interface ModeInfo {
-  id: GameMode | 'rhythm';
+  id: GameMode;
   name: string;
   blurb: string;
   available: boolean;
@@ -17,13 +18,13 @@ export interface ModeInfo {
 
 export const GAME_MODES: readonly ModeInfo[] = [
   { id: 'endless', name: 'Sin fin', blurb: 'Corré lo más lejos posible', available: true },
-  { id: 'rhythm', name: 'Ritmo', blurb: 'Niveles al compás de la música', available: false },
+  { id: 'rhythm', name: 'Ritmo', blurb: 'Niveles al compás de la música', available: true },
 ];
 
 export const DEFAULT_MODE: GameMode = 'endless';
 
 export function isGameMode(v: unknown): v is GameMode {
-  return v === 'endless';
+  return v === 'endless' || v === 'rhythm';
 }
 
 /** Menu copy for each endless difficulty. */

@@ -27,6 +27,14 @@ export class Loop {
     this.raf = requestAnimationFrame(this.frame);
   }
 
+  /**
+   * Move the simulation clock by `seconds` relative to the frame clock (positive: catch up with extra
+   * steps on the next frames; negative: hold back). Used to stay locked to the music in rhythm mode.
+   */
+  shift(seconds: number): void {
+    this.acc = Math.max(-0.1, this.acc + seconds);
+  }
+
   stop(): void {
     this.running = false;
     cancelAnimationFrame(this.raf);
@@ -48,6 +56,6 @@ export class Loop {
       steps++;
     }
     if (steps === MAX_STEPS_PER_FRAME) this.acc = 0;
-    this.render(this.acc / STEP, frameDt);
+    this.render(Math.max(0, this.acc) / STEP, frameDt);
   };
 }

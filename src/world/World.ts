@@ -1,5 +1,5 @@
 import { Pool } from '../core/Pool';
-import { COIN, HAZARD, Rect, SOLID, WAVE_SLAM, moverLift, type RectKind, type Wave } from './Rect';
+import { COIN, HAZARD, PAD, RING, Rect, SOLID, WAVE_SLAM, moverLift, type RectKind, type Wave } from './Rect';
 
 /** Where the world starts (behind the player's spawn at x = 0). */
 export const WORLD_START = -12;
@@ -22,6 +22,8 @@ export class World {
    */
   readonly moverX: number[] = [];
   readonly moverIsCrusher: boolean[] = [];
+  /** True once a pad or ring has been added since the last reset (lets the runner skip those checks otherwise). */
+  special = false;
 
   /** `ringCols` must be a power of two and larger than the generated span kept alive. */
   constructor(private readonly ringCols = 256) {
@@ -34,6 +36,7 @@ export class World {
     this.prune(Infinity);
     this.moverX.length = 0;
     this.moverIsCrusher.length = 0;
+    this.special = false;
     this.cursor = origin;
     this.colBase = Math.floor(origin);
   }
@@ -47,6 +50,7 @@ export class World {
     r.kind = kind;
     r.taken = false;
     r.mover = false;
+    if (kind === PAD || kind === RING) this.special = true;
     const c0 = Math.floor(x0);
     const c1 = Math.floor(x1);
     r.lastCol = c1;

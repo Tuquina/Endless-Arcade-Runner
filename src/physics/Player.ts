@@ -7,12 +7,14 @@ import {
   HOLD_MAX,
   JUMP_BUFFER,
   JUMP_VELOCITY,
+  PAD_VELOCITY,
+  RING_VELOCITY,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
   STEP_UP,
   TERMINAL_VELOCITY,
 } from './constants';
-import { HAZARD, SOLID } from '../world/Rect';
+import { HAZARD, PAD, RING, SOLID } from '../world/Rect';
 import type { World } from '../world/World';
 
 /**
@@ -43,6 +45,8 @@ export class Player {
   private buffer = 0;
   private holdT = 0;
   private jumping = false;
+  /** Left edge of the last ring used, so holding a press inside one ring cannot fire it twice. */
+  private lastRing = NaN;
 
   reset(x = 0, y = 0): void {
     this.x = this.prevX = x;
@@ -54,6 +58,7 @@ export class Player {
     this.buffer = 0;
     this.holdT = 0;
     this.jumping = false;
+    this.lastRing = NaN;
     this.jumped = this.landed = false;
   }
 
@@ -69,6 +74,7 @@ export class Player {
     this.buffer = o.buffer;
     this.holdT = o.holdT;
     this.jumping = o.jumping;
+    this.lastRing = o.lastRing;
   }
 
   /** True while a jump is still allowed (on ground, or within coyote time). */
@@ -115,6 +121,27 @@ export class Player {
       this.vy = JUMP_VELOCITY;
       this.jumping = true;
       this.holdT = 0;
+      this.grounded = false;
+      this.coyote = 0;
+      this.buffer = 0;
+      this.jumped = true;
+    } else if (world.special && this.buffer > 0) {
+      // Rhythm rings: a press while touching one jumps again in mid-air (each ring works once).
+      const ring = world.overlap(this.x - hw, this.y, this.x + hw, this.y + h, RING);
+      if (ring && ring.x0 !== this.lastRing) {
+        this.lastRing = ring.x0;
+        // Fixed height (holding does not raise it), so a chain of rings always follows the same arc.
+        this.vy = RING_VELOCITY;
+        this.jumping = false;
+        this.holdT = 0;
+        this.buffer = 0;
+        this.jumped = true;
+      }
+    }
+    // Rhythm pads: running onto one launches the runner without a press.
+    if (world.special && this.vy <= 0 && world.overlap(this.x - hw, this.y, this.x + hw, this.y + h, PAD)) {
+      this.vy = PAD_VELOCITY;
+      this.jumping = false;
       this.grounded = false;
       this.coyote = 0;
       this.buffer = 0;

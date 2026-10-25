@@ -1,6 +1,7 @@
 import { PLAYER_HEIGHT } from '../physics/constants';
 import type { Game } from '../core/Game';
-import { COIN, HAZARD, SOLID, WAVE_SLAM, moverCycle, moverLift, type Rect } from '../world/Rect';
+import { COIN, HAZARD, PAD, RING, SOLID, WAVE_SLAM, moverCycle, moverLift, type Rect } from '../world/Rect';
+import { LEVELS } from '../rhythm/levels';
 import { Confetti } from './Confetti';
 import { hash } from './hash';
 import { GroundPainter } from './Ground';
@@ -23,6 +24,8 @@ const MAX_PIXELS = 4_200_000;
 const GROUND_DEPTH = -1;
 
 const DASH: number[] = [10, 10];
+const JUDGE_TEXT = { perfect: '¡PERFECTO!', good: 'BIEN', ok: 'OK', miss: '' } as const;
+const JUDGE_COLOR = { perfect: '#ffd23f', good: '#2ee6a6', ok: '#6ec1ff', miss: '#ffffff' } as const;
 
 /**
  * Draws the world with a fixed tile-based camera: themed sky, parallax layers, geometry,
@@ -56,6 +59,8 @@ export class Renderer {
   private skyGrad: CanvasGradient | null = null;
   private skyVersion = -1;
   private readonly visible: Rect[] = [];
+  /** Rhythm mode: 0..1 flash on every beat (scaled by the section's energy). */
+  private pulse = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d', { alpha: false })!;
@@ -112,7 +117,15 @@ export class Renderer {
     this.camX = px - this.viewW * PLAYER_SCREEN_X;
     this.groundPx = this.h * GROUND_SCREEN_Y;
 
-    this.theme.update(px + game.themeOffset);
+    // Rhythm levels keep one world's palette for the whole song.
+    this.theme.update(game.inRhythm ? game.rhythm.level!.def.theme * 400 + 1 : px + game.themeOffset);
+    if (game.inRhythm) {
+      const { beats, energy } = game.rhythm.beat();
+      const phase = beats - Math.floor(beats);
+      this.pulse = beats >= 0 ? Math.exp(-phase * 7) * (0.35 + 0.65 * energy) : 0;
+    } else {
+      this.pulse = 0;
+    }
     if (this.skyVersion !== this.theme.version) {
       const g = ctx.createLinearGradient(0, 0, 0, this.groundPx);
       g.addColorStop(0, this.theme.c.skyTop);
@@ -126,6 +139,10 @@ export class Renderer {
     ctx.setTransform(1, 0, 0, 1, Math.sin(game.time * 91) * sh, Math.cos(game.time * 77) * sh);
 
     this.drawBackground(game);
+    if (this.pulse > 0.02) {
+      ctx.fillStyle = `rgba(255,255,255,${(0.07 * this.pulse).toFixed(3)})`;
+      ctx.fillRect(-40, -40, this.w + 80, this.groundPx + 40);
+    }
     this.drawWorld(game, px);
     game.fx.draw(ctx, this.camX, this.groundPx, scale);
     this.drawPlayer(game, px, py);
@@ -336,6 +353,18 @@ export class Renderer {
       ctx.fill();
     }
 
+    // Pads and rings (rhythm mode).
+    for (let i = 0; i < vis.length; i++) {
+      const r = vis[i]!;
+      if (r.kind === PAD) this.drawPad(r);
+      else if (r.kind === RING) this.drawRing(r, game);
+    }
+
+    if (game.inRhythm) {
+      this.drawRhythm(game, runnerX);
+      return;
+    }
+
     // Challenge gates: a dashed line at each distance goal (gold until it has been reached).
     if (game.state !== 'menu') {
       ctx.setLineDash(DASH);
@@ -371,6 +400,159 @@ export class Renderer {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.fillText('RÉCORD', bx + 6, this.groundPx * 0.25);
+      }
+    }
+  }
+
+  private drawPad(r: Rect): void {
+    const { ctx, scale } = this;
+    const cx = this.X((r.x0 + r.x1) / 2);
+    const base = this.Y(r.y0);
+    const wpx = (r.x1 - r.x0) * scale;
+    const glow = 0.5 + 0.5 * this.pulse;
+    ctx.fillStyle = `rgba(255,210,63,${(0.25 * glow).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.ellipse(cx, base, wpx * 0.9, scale * 0.5 * (1 + 0.3 * this.pulse), 0, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = '#ffd23f';
+    ctx.beginPath();
+    ctx.ellipse(cx, base, wpx * 0.55, scale * 0.22, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(2, scale * 0.06);
+    ctx.beginPath();
+    for (let k = 0; k < 2; k++) {
+      const y = base - scale * (0.45 + k * 0.28 + 0.1 * this.pulse);
+      ctx.moveTo(cx - scale * 0.18, y + scale * 0.14);
+      ctx.lineTo(cx, y);
+      ctx.lineTo(cx + scale * 0.18, y + scale * 0.14);
+    }
+    ctx.stroke();
+  }
+
+  private drawRing(r: Rect, game: Game): void {
+    const { ctx, scale } = this;
+    const cx = this.X((r.x0 + r.x1) / 2);
+    const cy = this.Y((r.y0 + r.y1) / 2);
+    const rad = scale * 0.42 * (1 + 0.12 * this.pulse);
+    ctx.strokeStyle = 'rgba(255,210,63,0.35)';
+    ctx.lineWidth = scale * 0.22;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, 6.283);
+    ctx.stroke();
+    ctx.strokeStyle = '#ffd23f';
+    ctx.lineWidth = scale * 0.09;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    const a = game.time * 4;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, scale * 0.06, 0, 6.283);
+    ctx.fill();
+  }
+
+  /** Beat ticks, jump guides, checkpoints, best-progress marker, finish line and judgement popups. */
+  private drawRhythm(game: Game, runnerX: number): void {
+    const { ctx, scale } = this;
+    const r = game.rhythm;
+    const lv = r.level!;
+    const x0 = this.camX - 1;
+    const x1 = this.camX + this.viewW + 1;
+
+    // A tick on the ground for every beat, longer on the first beat of a bar.
+    const beatLen = lv.speed * lv.song.stepDur * 4;
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    for (let k = Math.max(0, Math.ceil(x0 / beatLen)); k * beatLen < x1; k++) {
+      const bx = this.X(k * beatLen);
+      const bar = k % 4 === 0;
+      ctx.fillRect(bx - 1, this.groundPx + scale * 0.05, 2, scale * (bar ? 0.4 : 0.2));
+    }
+
+    // Where to press (first levels, and always in practice): a dot that fills as the runner gets there.
+    if (lv.def.guides || r.practice) {
+      for (const pr of lv.presses) {
+        if (pr.x < runnerX - 0.5) continue;
+        if (pr.x > x1) break;
+        const gx = this.X(pr.x);
+        const gy = this.Y(pr.y) - scale * 0.08;
+        const near = Math.max(0, 1 - (pr.x - runnerX) / 6);
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = Math.max(1.5, scale * 0.05);
+        ctx.fillStyle = `rgba(255,255,255,${(0.15 + 0.6 * near).toFixed(3)})`;
+        ctx.beginPath();
+        if (pr.hold) ctx.ellipse(gx + scale * 0.2, gy, scale * 0.38, scale * 0.14, 0, 0, 6.283);
+        else ctx.arc(gx, gy, scale * 0.15, 0, 6.283);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+
+    if (r.practice) {
+      ctx.fillStyle = '#2ee6a6';
+      for (const cp of lv.checkpoints) {
+        if (cp.state.x < x0 || cp.state.x > x1) continue;
+        const cx = this.X(cp.state.x);
+        const cy = this.Y(cp.state.y) - scale * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - scale * 0.25);
+        ctx.lineTo(cx + scale * 0.18, cy);
+        ctx.lineTo(cx, cy + scale * 0.25);
+        ctx.lineTo(cx - scale * 0.18, cy);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    ctx.font = `900 ${Math.round(scale * 0.42)}px system-ui, sans-serif`;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    const rec = game.levelRecord(r.index);
+    if (!r.practice && rec.best > 0 && rec.best < 100) {
+      const bx = this.X((rec.best / 100) * lv.endX);
+      if (bx > -scale && bx < this.w + scale) {
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(bx - 1, 0, 2, this.groundPx);
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillText(`MEJOR ${rec.best}%`, bx + 6, this.groundPx * 0.22);
+      }
+    }
+
+    // Big attempt counter at the start, like a title card painted on the level.
+    const sx = this.X(2.5);
+    if (sx > -this.w && sx < this.w && game.state !== 'menu') {
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.font = `900 ${Math.round(scale * 0.75)}px system-ui, sans-serif`;
+      ctx.fillText(r.practice ? 'PRÁCTICA' : `INTENTO ${rec.attempts}`, sx, this.Y(4.2));
+      ctx.font = `800 ${Math.round(scale * 0.38)}px system-ui, sans-serif`;
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.fillText(`${LEVELS[r.index]!.name} · ${lv.def.song.bpm} BPM`, sx, this.Y(3.1));
+    }
+
+    // Finish gate: a checkered column.
+    const fx = this.X(lv.endX);
+    if (fx > -scale && fx < this.w + scale) {
+      const cell = scale * 0.35;
+      for (let row = 0; row * cell < this.groundPx; row++) {
+        for (let col = 0; col < 2; col++) {
+          ctx.fillStyle = (row + col) % 2 ? '#ffffff' : '#14102b';
+          ctx.fillRect(fx + col * cell, this.groundPx - (row + 1) * cell, cell, cell);
+        }
+      }
+      ctx.fillStyle = '#ffd23f';
+      ctx.font = `900 ${Math.round(scale * 0.5)}px system-ui, sans-serif`;
+      ctx.fillText('META', fx + cell * 2.4, this.groundPx * 0.3);
+    }
+
+    // Judgement popup above the runner.
+    const pop = r.popup;
+    if (pop && pop.j !== 'miss') {
+      const age = game.time - pop.at;
+      if (age < 0.55) {
+        ctx.globalAlpha = Math.min(1, (0.55 - age) / 0.2);
+        ctx.fillStyle = JUDGE_COLOR[pop.j];
+        ctx.textAlign = 'center';
+        ctx.font = `900 ${Math.round(scale * (0.42 + (pop.j === 'perfect' ? 0.12 : 0)))}px system-ui, sans-serif`;
+        ctx.fillText(JUDGE_TEXT[pop.j], this.X(runnerX), this.Y(pop.y + 2.2 + age * 1.5));
+        ctx.globalAlpha = 1;
       }
     }
   }

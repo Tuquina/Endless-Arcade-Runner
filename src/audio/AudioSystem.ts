@@ -1,6 +1,7 @@
 import { SFX, type SfxEnv, type SfxName } from './sfx';
 import { LOOP_STEPS, scheduleStep, stepDuration } from './music';
 import { makeNoise } from './synth';
+import { scheduleSongStep, type CompiledSong, type SongEnv } from './song';
 
 export interface AudioSettings {
   music: boolean;
@@ -22,6 +23,7 @@ const LOOKAHEAD = 0.14; // seconds of music scheduled ahead
 const TICK_MS = 25;
 const MAX_VOICES = 14;
 const MUSIC_LEVEL = 0.4;
+const SONG_LEVEL = 0.75;
 const GESTURES = ['pointerdown', 'keydown', 'touchend', 'click'] as const;
 
 /**
@@ -35,6 +37,20 @@ export class AudioSystem {
   private musicEnv: SfxEnv | null = null;
   private musicBus: GainNode | null = null;
   private sfxBus: GainNode | null = null;
+  private master: GainNode | null = null;
+  private noiseBuf: AudioBuffer | null = null;
+
+  // Rhythm-mode song playback: a fresh bus per playback so stopping silences everything already scheduled.
+  private song: CompiledSong | null = null;
+  private songBus: GainNode | null = null;
+  private songEnv: SongEnv | null = null;
+  private songTimer: ReturnType<typeof setInterval> | null = null;
+  private songStep = 0;
+  /** Audio time at which song time `songOffset` is played. */
+  private songAnchor = 0;
+  private songOffset = 0;
+  /** Player-calibrated extra delay between scheduling a sound and hearing it (ms, from settings). */
+  latencyMs = 0;
 
   private mode: MusicMode = 'off';
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -84,6 +100,7 @@ export class AudioSystem {
     const master = ctx.createGain();
     master.gain.value = 0.8;
     master.connect(ctx.destination);
+    this.master = master;
     this.musicBus = ctx.createGain();
     this.musicBus.gain.value = 0;
     this.musicBus.connect(master);
@@ -91,6 +108,7 @@ export class AudioSystem {
     this.sfxBus.gain.value = 1;
     this.sfxBus.connect(master);
     const noise = makeNoise(ctx);
+    this.noiseBuf = noise;
     this.env = { ctx, out: this.sfxBus, noise };
     this.musicEnv = { ctx, out: this.musicBus, noise };
     // iOS: a silent one-sample buffer played inside the gesture fully unlocks output.
@@ -135,7 +153,89 @@ export class AudioSystem {
   /** Call after the music/sfx switches change. */
   refresh(): void {
     this.applyMusic();
+    if (this.songBus && this.ctx) this.songBus.gain.setTargetAtTime(this.settings().music ? SONG_LEVEL : 0, this.ctx.currentTime, 0.05);
   }
+
+  // ------------------------------------------------------------------ rhythm songs
+
+  /**
+   * Start `song` from song time `offset` (seconds) shortly from now. Returns false if there is no
+   * audio context yet (no user gesture); the game then keeps time on its own.
+   */
+  playSong(song: CompiledSong, offset: number): boolean {
+    this.stopSong();
+    const ctx = this.ctx;
+    if (!ctx || !this.master || !this.noiseBuf) return false;
+    const bus = ctx.createGain();
+    bus.gain.value = this.settings().music ? SONG_LEVEL : 0;
+    // Gentle bus compression: glues the mix and keeps the louder choruses from clipping.
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -16;
+    comp.ratio.value = 3;
+    comp.attack.value = 0.005;
+    comp.release.value = 0.15;
+    bus.connect(comp);
+    comp.connect(this.master);
+    // Dotted-8th echo with a darkening feedback loop, for leads and arpeggios.
+    const echo = ctx.createDelay(1);
+    echo.delayTime.value = song.stepDur * 3;
+    const fb = ctx.createGain();
+    fb.gain.value = 0.32;
+    const tone = ctx.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.value = 2400;
+    echo.connect(tone);
+    tone.connect(fb);
+    fb.connect(echo);
+    tone.connect(bus);
+    this.song = song;
+    this.songBus = bus;
+    this.songEnv = { ctx, out: bus, noise: this.noiseBuf, echo };
+    this.songOffset = offset;
+    this.songAnchor = ctx.currentTime + 0.1;
+    this.songStep = Math.max(0, Math.ceil(offset / song.stepDur - 1e-6));
+    this.songTimer = setInterval(this.songTick, TICK_MS);
+    this.songTick();
+    return true;
+  }
+
+  stopSong(): void {
+    if (this.songTimer) clearInterval(this.songTimer);
+    this.songTimer = null;
+    const bus = this.songBus;
+    const ctx = this.ctx;
+    if (bus && ctx) {
+      bus.gain.cancelScheduledValues(ctx.currentTime);
+      bus.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
+      setTimeout(() => bus.disconnect(), 400);
+    }
+    this.songBus = null;
+    this.songEnv = null;
+    this.song = null;
+  }
+
+  /**
+   * Song time the player is hearing right now (seconds), or null when it can't be known (no song,
+   * or the audio clock isn't running). Output latency and the player's calibration are subtracted.
+   */
+  songTime(): number | null {
+    const ctx = this.ctx;
+    if (!ctx || !this.song || ctx.state !== 'running') return null;
+    const out = (ctx as AudioContext & { outputLatency?: number }).outputLatency || ctx.baseLatency || 0;
+    return this.songOffset + (ctx.currentTime - this.songAnchor) - out - this.latencyMs / 1000;
+  }
+
+  private songTick = (): void => {
+    const ctx = this.ctx;
+    const song = this.song;
+    if (!ctx || !song || !this.songEnv) return;
+    for (let guard = 0; guard < 64; guard++) {
+      const t = this.songAnchor + (this.songStep * song.stepDur - this.songOffset);
+      if (t > ctx.currentTime + LOOKAHEAD || this.songStep >= song.totalSteps) break;
+      if (t >= ctx.currentTime - 0.02) scheduleSongStep(this.songEnv, song, this.songStep, Math.max(t, ctx.currentTime));
+      this.songStep++;
+    }
+  };
 
   private applyMusic(): void {
     const ctx = this.ctx;
@@ -180,6 +280,7 @@ export class AudioSystem {
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.onVisibility);
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    this.stopSong();
     void this.ctx?.close();
     this.ctx = null;
   }

@@ -38,8 +38,9 @@ src/
   input/     un solo "botón" a partir de teclado, mouse, touch y lápiz
   physics/   constantes de ajuste, Player (salto variable, coyote time, jump buffer), jumpModel
   world/     World (geometría y movers), segmentos prefabricados, Generator, Difficulty, Solver, tabla de variantes
+  rhythm/    modo Ritmo: niveles (canciones + charts), compilador de niveles, RhythmRun (reloj, juicio, práctica)
   render/    Renderer, temas/paletas, partículas, animación del personaje, confeti
-  audio/     síntesis WebAudio: efectos, música y AudioSystem (autoplay, interruptores)
+  audio/     síntesis WebAudio: efectos, música del modo sin fin, secuenciador de canciones y AudioSystem
   storage/   Save (localStorage versionado, a prueba de datos corruptos y de varias pestañas)
   ui/        pantallas DOM (menú, HUD, pausa, derrota, ajustes, aspectos) y estilos
 ```
@@ -84,8 +85,8 @@ dibujo), así que ya no exigen el píxel exacto.
 
 ### Modos y dificultades
 
-El menú elige el **modo de juego** (hoy solo *Sin fin*; *Ritmo*, por niveles, aparece como "Próximamente" y será un modo
-aparte, sin reemplazar al runner) y la **dificultad** del modo sin fin, con récord propio en cada una
+El menú elige el **modo de juego** (*Sin fin* o *Ritmo*, ver abajo) y la **dificultad** del modo sin fin, con récord
+propio en cada una
 (`src/core/modes.ts`, `DIFFICULTIES` en `src/world/Difficulty.ts`):
 
 | | Fácil | Normal | Difícil |
@@ -121,11 +122,53 @@ para saltar es de tamaño humano. El generador solo usa variantes de esa tabla (
 cada 1000 m). Los tests comprueban que la tabla está al día: **si editás un segmento marcado `validate`,
 ejecutá `npm run gen:variants` (~2 min) y commiteá el resultado**.
 
+## Modo Ritmo
+
+Un modo aparte del runner infinito: **8 niveles fijos**, cada uno con una canción original compuesta para el juego.
+Los obstáculos caen sobre las notas, así que saltar *en el tiempo de la música* es lo más seguro.
+
+**Música propia, sin archivos ni derechos de terceros.** Cada canción es un dato (`src/rhythm/levels.ts`):
+tempo, tonalidad y escala, y secciones (intro, verso, estribillo, puente, final, outro) con batería, bajo,
+arpegios, pads y melodía escritos en la misma grilla de semicorcheas que el *chart* de obstáculos. El secuenciador
+(`src/audio/song.ts`) los sintetiza en vivo con WebAudio (osciladores, filtros, eco). Escribir la música y el nivel
+lado a lado es lo que garantiza que coincidan.
+
+| # | Nivel | BPM | Escala | Idea nueva |
+|---|---|---|---|---|
+| 1 | Primer Pulso | 100 | La menor | pinchos (con guías de salto) |
+| 2 | Hora Dorada | 108 | Re dórico | bloques y huecos |
+| 3 | Marea Alta | 116 | Mi menor | pinchos triples, huecos largos, pisos que suben |
+| 4 | Bosque Binario | 122 | Sol dórico | plataformas de impulso |
+| 5 | Eclipse | 128 | Do menor armónica | anillos: saltar en el aire |
+| 6 | Neón Salvaje | 136 | Fa# menor | todo junto |
+| 7 | Tormenta Solar | 144 | Si menor | cadenas de anillos |
+| 8 | Último Beat | 152 | La frigio | todo, denso |
+
+**Cómo se arma un nivel** (`src/rhythm/level.ts`). El chart usa un carácter por semicorchea: `s d t` (1, 2 o 3
+pinchos), `b B` (bloque bajo / alto), `p P` (hueco / hueco largo), `u n` (sube / baja el piso), `j` (plataforma de
+impulso), `r` (anillo en el aire), `D` (disco coleccionable). Para cada obstáculo se simula con la física real
+qué momentos de salto lo pasan (con un toque corto *y* con el botón mantenido) y se lo coloca para que ese rango
+quede **centrado en la nota**. Anillos, impulsos y discos se ubican sobre la trayectoria de un jugador "perfecto"
+que salta en cada nota. Los tests recorren cada nivel con ese jugador y con versiones desprolijas: errores
+aleatorios de ±60 ms (±45 ms desde el nivel 5), todo adelantado o atrasado 40 ms, y toques siempre cortos o siempre
+largos. Si un chart pide un salto antes de aterrizar del anterior, el nivel ni compila y el error dice sección,
+compás y paso.
+
+**Sincronía.** La simulación sigue el reloj del audio (`AudioContext`, descontando la latencia de salida): espera a
+que suene el primer tiempo y después corrige el bucle de paso fijo de a milisegundos. En Ajustes hay un control de
+**sincronía del ritmo** para auriculares Bluetooth u otros equipos con más latencia.
+
+**Progresión.** Completar un nivel abre el siguiente. Cada nivel guarda el mejor %, los intentos, la precisión
+(cada salto se juzga *perfecto / bien / ok* según la distancia a la nota; nota S, A, B o C) y 3 **discos** ubicados
+sobre el camino ideal (se pierden si saltás fuera de tiempo; cuentan al completar el nivel). El **modo Práctica**
+agrega puntos de control al inicio de cada sección, reaparecés con la música desde ahí, y no guarda récords.
+Los niveles completados y los discos desbloquean aspectos (DJ, Bola disco, Maestro).
+
 ## Aspectos y objetivos
 
-18 aspectos (solo cosméticos: no cambian la hitbox ni los controles), cada uno con su propio diseño: patrón en el
+21 aspectos (solo cosméticos: no cambian la hitbox ni los controles), cada uno con su propio diseño: patrón en el
 cuerpo, cara, accesorios animados, efectos y una estela de partículas propia (brasas, burbujas, estrellas, humo,
-copos, píxeles…). Se desbloquean con objetivos de cinco tipos, así que no todo se resuelve corriendo más lejos:
+copos, píxeles…). Se desbloquean con objetivos de varios tipos, así que no todo se resuelve corriendo más lejos:
 
 | Tipo | Ejemplos |
 |---|---|
@@ -134,6 +177,7 @@ copos, píxeles…). Se desbloquean con objetivos de cinco tipos, así que no to
 | Partidas jugadas | 40 Robot · 150 Fantasma |
 | Sierras esquivadas | 40 Hielo |
 | Prensas pasadas | 25 Glitch |
+| Modo Ritmo | 2 niveles DJ · 12 discos Bola disco · 8 niveles Maestro |
 
 Los objetivos se cumplen en el momento (aviso en pantalla y guardado inmediato), el menú muestra el aspecto más
 cercano a completarse, y las metas de distancia aparecen como puertas doradas en el mundo.

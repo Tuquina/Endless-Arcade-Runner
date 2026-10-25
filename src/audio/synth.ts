@@ -67,3 +67,65 @@ export function noise(ctx: BaseAudioContext, out: AudioNode, buffer: AudioBuffer
   src.start(o.start, Math.random() * 0.5);
   src.stop(o.start + o.dur + 0.02);
 }
+
+export interface VoiceOpts {
+  type: OscillatorType;
+  freq: number;
+  start: number;
+  dur: number;
+  gain: number;
+  attack?: number;
+  /** 'pluck' decays over the whole note; 'hold' sustains and releases over the last `release` seconds. */
+  shape?: 'pluck' | 'hold';
+  release?: number;
+  /** Optional low-pass filter (Hz), swept to `cutoffEnd` over the note. */
+  cutoff?: number;
+  cutoffEnd?: number;
+  q?: number;
+  /** Adds a second oscillator detuned by this many cents (fat leads and pads). */
+  detune?: number;
+  /** Extra destination (e.g. an echo send) fed at this level. */
+  send?: AudioNode;
+  sendGain?: number;
+}
+
+/** Richer instrument voice for the rhythm songs: optional filter, detuned pair, pluck or sustain envelope. */
+export function voice(ctx: BaseAudioContext, out: AudioNode, o: VoiceOpts): void {
+  const end = o.start + o.dur;
+  const g = ctx.createGain();
+  const attack = o.attack ?? 0.004;
+  g.gain.setValueAtTime(0.0001, o.start);
+  g.gain.linearRampToValueAtTime(o.gain, o.start + attack);
+  if (o.shape === 'hold') {
+    const rel = Math.min(o.release ?? 0.08, o.dur * 0.5);
+    g.gain.setValueAtTime(o.gain, Math.max(o.start + attack, end - rel));
+  }
+  g.gain.exponentialRampToValueAtTime(0.0001, end);
+  let input: AudioNode = g;
+  if (o.cutoff) {
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.Q.value = o.q ?? 1;
+    f.frequency.setValueAtTime(o.cutoff, o.start);
+    if (o.cutoffEnd) f.frequency.exponentialRampToValueAtTime(o.cutoffEnd, end);
+    f.connect(g);
+    input = f;
+  }
+  g.connect(out);
+  if (o.send) {
+    const s = ctx.createGain();
+    s.gain.value = o.sendGain ?? 0.3;
+    g.connect(s);
+    s.connect(o.send);
+  }
+  const n = o.detune ? 2 : 1;
+  for (let i = 0; i < n; i++) {
+    const osc = ctx.createOscillator();
+    osc.type = o.type;
+    osc.frequency.setValueAtTime(o.freq, o.start);
+    if (o.detune) osc.detune.value = i === 0 ? -o.detune : o.detune;
+    osc.connect(input);
+    osc.start(o.start);
+    osc.stop(end + 0.02);
+  }
+}
