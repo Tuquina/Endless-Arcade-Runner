@@ -470,7 +470,7 @@ export class UI {
         el('hud-pct').textContent = `${g.distance} m`;
         const z = g.zone;
         const f = z ? (g.player.x - z.x0) / (z.x1 - z.x0) : 0;
-        el('hud-progress-fill').style.width = `${Math.max(0, Math.min(1, f)) * 100}%`;
+        el('hud-progress-fill').style.transform = `scaleX(${Math.max(0, Math.min(1, f)).toFixed(3)})`;
       }
       const name = g.trackName;
       if (name !== this.lastTrack) {
@@ -481,7 +481,7 @@ export class UI {
       if (g.rhythmProgress !== this.lastPct) {
         this.lastPct = g.rhythmProgress;
         el('hud-pct').textContent = `${g.rhythmProgress}%`;
-        el('hud-progress-fill').style.width = `${g.rhythmProgress}%`;
+        el('hud-progress-fill').style.transform = `scaleX(${g.rhythmProgress / 100})`;
       }
     }
     if (g.musical) {
@@ -520,7 +520,7 @@ export class UI {
       const num = el('hud-goal-num');
       num.textContent = `${value} / ${target.goal.n}`;
       num.dataset.unit = ` ${GOAL_UNIT[target.goal.type]}`; // shown by CSS, dropped on very narrow screens
-      el('hud-goal-fill').style.width = `${(value / target.goal.n) * 100}%`;
+      el('hud-goal-fill').style.transform = `scaleX(${(value / target.goal.n).toFixed(3)})`;
     }
   }
 

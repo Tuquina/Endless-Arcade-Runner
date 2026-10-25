@@ -105,10 +105,25 @@ ver el comentario de `src/core/modes.ts`.
 
 ### Suelo y HUD
 
-El suelo (`src/render/Ground.ts`) tiene franja de profundidad, estratos y piedras con parallax, un borde superior
-con luz, vegetación animada por mundo y paredes en los pozos. Si los cuadros se mantienen lentos (celular
-débil) baja solo a una versión sin decoración y vuelve cuando se recupera. En partida el HUD muestra los metros
-en vivo y el progreso hacia la próxima skin.
+El suelo (`src/render/Ground.ts`) tiene franja de profundidad, estratos, piedras y un subsuelo propio de cada
+mundo (circuitos, raíces, conchas…), un borde superior con luz que late con la música y vegetación animada.
+Los techos de los niveles de gravedad son el mismo suelo espejado, con plantas colgantes y gotas que caen, y los
+bloques llevan una textura por mundo.
+
+### Rendimiento
+
+El juego está limitado por relleno de píxeles, no por JavaScript, así que el renderer evita repintar lo
+estático: suelo, techos, montañas, skyline y primer plano se pintan una vez en texturas periódicas y cada cuadro
+solo se copian 1:1 con desplazamiento entero (sin re-muestreo). Además:
+
+- **Calidad adaptativa**: si los cuadros se mantienen lentos baja la resolución interna (100 % → 80 % → 66 %) y
+  luego la decoración; sube sola cuando el equipo se recupera.
+- **Reloj de audio suave**: el modo ritmo corrige el desfase con la música en pasos de ≤1,5 ms en vez de saltos.
+- **HUD sin layout**: las barras usan `transform`, que anima el compositor.
+
+Herramientas de depuración: `?debug` (fps y mundo), `?prof` (tiempo por sección), `?q=N` (fija la calidad).
+
+En partida el HUD muestra los metros en vivo y el progreso hacia la próxima skin.
 
 ### Obstáculos móviles y por qué siempre se pueden pasar
 
