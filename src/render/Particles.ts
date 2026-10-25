@@ -1,3 +1,5 @@
+import type { TrailKind } from '../core/skins';
+
 const MAX = 192;
 
 export const P_DUST = 0;
@@ -5,14 +7,15 @@ export const P_SHARD = 1;
 export const P_RING = 2;
 export const P_SPARK = 3;
 
-const COLORS = ['#ffffff', '#ffd23f', '#2ee6a6', '#ff4d6d', '#c79a12', '#ffd23f'];
+const COLORS = ['#ffffff', '#ffd23f', '#2ee6a6', '#ff4d6d', '#c79a12', '#ffd23f', '#ffd23f', '#ffd23f', '#ffd23f'];
 export const C_WHITE = 0;
 export const C_GOLD = 1;
 export const C_GREEN = 2;
 export const C_PINK = 3;
 export const C_DARK = 4;
-/** Slot recoloured to match the selected skin (trail and death burst). */
+/** First of 4 slots recoloured to match the selected skin (trail and death burst). */
 export const C_SKIN = 5;
+const SKIN_SLOTS = 4;
 
 /**
  * Pool of world-space particles in parallel typed arrays (no per-particle objects). Spawning
@@ -35,9 +38,16 @@ export class Particles {
   /** 1 normally; lower for reduced-motion users. */
   density = 1;
   private readonly palette = COLORS.slice();
+  private trailKind: TrailKind = 'shard';
+  private trailColors = 1;
 
-  setSkinColor(color: string): void {
-    this.palette[C_SKIN] = color;
+  /** Recolour the skin slots and pick how the trail moves. `colors[0]` also colours the death burst. */
+  setSkin(color: string, trail?: { kind: TrailKind; colors: readonly string[] }): void {
+    const colors = trail?.colors.length ? trail.colors : [color];
+    for (let i = 0; i < SKIN_SLOTS; i++) this.palette[C_SKIN + i] = colors[i % colors.length]!;
+    this.trailColors = Math.min(SKIN_SLOTS, colors.length);
+    this.trailKind = trail?.kind ?? 'shard';
+    if (!trail) this.palette[C_SKIN] = color;
   }
 
   clear(): void {
@@ -68,6 +78,12 @@ export class Particles {
     }
   }
 
+  /** A small puff kicked up by the runner's feet while it runs. */
+  run(x: number, y: number): void {
+    if (this.density < 0.5 && Math.random() < 0.5) return;
+    this.spawn(P_DUST, x, y + 0.04, -2.2 - Math.random() * 1.5, 0.3 + Math.random() * 0.6, 0.3 + Math.random() * 0.15, 0.06 + Math.random() * 0.05, C_WHITE);
+  }
+
   /** Expanding ring + dust sprayed sideways; stronger for harder landings. */
   land(x: number, y: number, impact: number): void {
     const power = Math.min(1, impact / 20);
@@ -79,9 +95,32 @@ export class Particles {
     }
   }
 
-  /** Little fading square left behind while airborne. */
+  /** One trail particle in the selected skin's style. */
   trail(x: number, y: number): void {
-    this.spawn(P_SHARD, x, y, -2, 0, 0.3, 0.22, C_SKIN, 0, 0);
+    const c = C_SKIN + Math.floor(Math.random() * this.trailColors);
+    const r = Math.random();
+    switch (this.trailKind) {
+      case 'ember': // rises like sparks off a fire
+        this.spawn(P_SPARK, x + (r - 0.5) * 0.3, y, -1.5 - r, 2 + r * 2.5, 0.45 + r * 0.2, 0.15, c);
+        break;
+      case 'bubble': // slow floating bubbles
+        this.spawn(P_DUST, x + (r - 0.5) * 0.3, y, -1.2, 0.8 + r * 0.8, 0.7 + r * 0.3, 0.14 + r * 0.06, c);
+        break;
+      case 'star': // little spinning stars
+        this.spawn(P_SHARD, x, y + (r - 0.5) * 0.5, -2 - r, (r - 0.5) * 2, 0.55, 0.2, c, 0, 8);
+        break;
+      case 'pixel': // square pixels that stay in a line
+        this.spawn(P_SPARK, x, y + (Math.floor(r * 3) - 1) * 0.22, -3, 0, 0.4, 0.2, c);
+        break;
+      case 'wisp': // soft smoke
+        this.spawn(P_DUST, x, y + (r - 0.5) * 0.3, -1, 0.5, 0.55, 0.28, c);
+        break;
+      case 'flake': // snow drifting down
+        this.spawn(P_DUST, x, y + r * 0.4, -1.5, -0.9, 0.8, 0.09, c);
+        break;
+      default:
+        this.spawn(P_SHARD, x, y, -2, 0, 0.3, 0.22, C_SKIN, 0, 0);
+    }
   }
 
   coin(x: number, y: number): void {

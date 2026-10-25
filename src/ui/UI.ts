@@ -1,5 +1,6 @@
 import type { Game } from '../core/Game';
-import { SKINS, type Skin } from '../core/skins';
+import { GOAL_UNIT, SKINS, goalText, type Skin } from '../core/skins';
+import { SkinPreview } from './SkinPreview';
 import './ui.css';
 
 type ScreenName = 'menu' | 'pause' | 'dead' | 'settings' | 'skins';
@@ -30,9 +31,20 @@ export class UI {
   private readonly toast = el('toast');
   private toastTimer = 0;
   private skinsOpen = false;
+  /** One preview per skin card, plus the big one in the main menu. */
+  private readonly previews = new Map<string, SkinPreview>();
+  private menuPreview: SkinPreview | null = null;
+  private previewRaf = 0;
+  private previewLast = 0;
   private readonly countdownEl = el('countdown');
   private readonly hudScore = el('hud-score');
   private readonly hudBest = el('hud-best');
+  private readonly hudDist = el('hud-dist');
+  private readonly hudGoal = el('hud-goal');
+  private goalPreview: SkinPreview | null = null;
+  private lastGoalTarget: Skin | null = null;
+  private lastGoalValue = -1;
+  private lastDist = -1;
   private readonly hudCoins = el('hud-coins');
   private readonly hudLevel = el('hud-level');
 
@@ -54,6 +66,8 @@ export class UI {
     game.onFrame = () => this.updateHud();
     game.onUnlock = (skin) => this.showToast(skin);
     this.buildSkins();
+    this.menuPreview = new SkinPreview(el<HTMLCanvasElement>('menu-skin'), game.skin);
+    this.goalPreview = new SkinPreview(el<HTMLCanvasElement>('hud-goal-skin'), game.skin);
     this.refreshToggles();
     this.sync();
   }
@@ -100,11 +114,40 @@ export class UI {
     this.hud.dataset.show = String(
       !this.settingsOpen && !this.skinsOpen && this.game.state !== 'menu' && this.game.state !== 'dead',
     );
+    this.updatePreviewLoop(active);
+  }
+
+  /** Animate the skin previews only while one of them is on screen. */
+  private updatePreviewLoop(active: ScreenName | null): void {
+    const wanted = active === 'skins' || active === 'menu';
+    if (!wanted) {
+      cancelAnimationFrame(this.previewRaf);
+      this.previewRaf = 0;
+      return;
+    }
+    if (this.previewRaf) return;
+    this.previewLast = performance.now();
+    const frame = (now: number): void => {
+      const dt = Math.min(0.05, (now - this.previewLast) / 1000);
+      this.previewLast = now;
+      if (this.skinsOpen && !this.settingsOpen) {
+        for (const p of this.previews.values()) {
+          p.fit();
+          p.tick(dt);
+        }
+      } else {
+        this.menuPreview?.fit();
+        this.menuPreview?.tick(dt);
+      }
+      this.previewRaf = requestAnimationFrame(frame);
+    };
+    this.previewRaf = requestAnimationFrame(frame);
   }
 
   private fillDead(): void {
     const g = this.game;
     el('dead-score').textContent = String(g.score);
+    el('dead-dist').textContent = String(g.distance);
     el('dead-best').textContent = String(g.best);
     el('dead-coins').textContent = String(g.coins);
     el('dead-record').hidden = !g.newRecord;
@@ -114,27 +157,31 @@ export class UI {
     badge.textContent = `¡Aspecto desbloqueado: ${g.unlockedNow.map((s) => s.name).join(', ')}!`;
     const next = g.nextReward;
     el('dead-next').textContent = next
-      ? `Próximo aspecto: ${next.name} · ${next.goal} m (tu mejor: ${g.maxDist} m)`
+      ? `Próximo aspecto: ${next.name} · ${goalText(next.goal)} (${Math.min(g.progressOf(next), next.goal.n)}/${next.goal.n})`
       : '';
   }
 
-  /** Menu progress bar towards the next skin. */
+  /** Menu progress bar towards the skin that is closest to being earned. */
   private refreshGoal(): void {
     const g = this.game;
     const next = g.nextReward;
     if (!next) {
       el('goal-label').textContent = '¡Todos los aspectos desbloqueados!';
       el('goal-num').textContent = '';
+      el('goal-hint').textContent = '';
       el('goal-fill').style.width = '100%';
       return;
     }
+    const value = Math.min(g.progressOf(next), next.goal.n);
     el('goal-label').textContent = `Próximo: ${next.name}`;
-    el('goal-num').textContent = `${Math.min(g.maxDist, next.goal)} / ${next.goal} m`;
-    el('goal-fill').style.width = `${Math.min(100, (g.maxDist / next.goal) * 100)}%`;
+    el('goal-num').textContent = `${value} / ${next.goal.n} ${GOAL_UNIT[next.goal.type]}`;
+    el('goal-hint').textContent = goalText(next.goal);
+    el('goal-fill').style.width = `${(value / next.goal.n) * 100}%`;
+    this.menuPreview?.setSkin(g.skin);
   }
 
   private showToast(skin: Skin): void {
-    this.toast.textContent = `¡${skin.goal} m! Aspecto desbloqueado: ${skin.name}`;
+    this.toast.textContent = `¡Aspecto desbloqueado: ${skin.name}! ${goalText(skin.goal)}`;
     this.toast.classList.add('show');
     window.clearTimeout(this.toastTimer);
     this.toastTimer = window.setTimeout(() => this.toast.classList.remove('show'), 3200);
@@ -148,18 +195,22 @@ export class UI {
       card.className = 'skin-card';
       card.dataset.action = 'select-skin';
       card.dataset.skin = s.id;
-      const cube = document.createElement('div');
-      cube.className = `skin-cube${s.accessory ? ` acc-${s.accessory}` : ''}${s.rainbow ? ' rainbow' : ''}`;
-      cube.style.setProperty('--c', s.color);
-      cube.style.setProperty('--s', s.shade);
-      cube.append(document.createElement('i'), document.createElement('i'));
+      const art = document.createElement('canvas');
+      art.className = 'skin-art';
       const name = document.createElement('span');
       name.className = 'skin-name';
       name.textContent = s.name;
+      const blurb = document.createElement('span');
+      blurb.className = 'skin-blurb';
+      blurb.textContent = s.blurb;
       const note = document.createElement('span');
       note.className = 'skin-note';
-      card.append(cube, name, note);
+      const bar = document.createElement('i');
+      bar.className = 'skin-bar';
+      bar.append(document.createElement('b'));
+      card.append(art, name, blurb, note, bar);
       grid.append(card);
+      this.previews.set(s.id, new SkinPreview(art, s));
     }
     this.refreshSkins();
   }
@@ -169,10 +220,20 @@ export class UI {
     for (const card of el('skin-grid').children as HTMLCollectionOf<HTMLElement>) {
       const skin = SKINS.find((s) => s.id === card.dataset.skin)!;
       const unlocked = g.isUnlocked(skin.id);
+      const note = card.querySelector<HTMLElement>('.skin-note')!;
+      const fill = card.querySelector<HTMLElement>('.skin-bar b')!;
       card.dataset.locked = String(!unlocked);
       card.setAttribute('aria-pressed', String(unlocked && g.skin.id === skin.id));
-      card.setAttribute('aria-label', unlocked ? skin.name : `${skin.name}, bloqueado: llegá a ${skin.goal} m`);
-      card.lastElementChild!.textContent = unlocked ? (g.skin.id === skin.id ? 'Elegido' : '') : `🔒 ${skin.goal} m`;
+      if (unlocked) {
+        card.setAttribute('aria-label', `${skin.name}. ${skin.blurb}`);
+        note.textContent = g.skin.id === skin.id ? 'Elegido' : '';
+        fill.style.width = '0';
+      } else {
+        const value = Math.min(g.progressOf(skin), skin.goal.n);
+        card.setAttribute('aria-label', `${skin.name}, bloqueado: ${goalText(skin.goal)} (${value} de ${skin.goal.n})`);
+        note.textContent = `🔒 ${goalText(skin.goal)} · ${value}/${skin.goal.n}`;
+        fill.style.width = `${(value / skin.goal.n) * 100}%`;
+      }
     }
   }
 
@@ -188,6 +249,11 @@ export class UI {
       this.lastBest = best;
       this.hudBest.textContent = String(best);
     }
+    if (g.distance !== this.lastDist) {
+      this.lastDist = g.distance;
+      this.hudDist.textContent = String(g.distance);
+    }
+    this.updateGoalPill();
     if (g.coins !== this.lastCoins) {
       this.lastCoins = g.coins;
       this.hudCoins.textContent = String(g.coins);
@@ -197,6 +263,32 @@ export class UI {
       this.hudLevel.textContent = String(g.level);
     }
     this.updateCountdown();
+  }
+
+  /** Live progress towards the skin closest to being earned (same bar as the menu, in miniature). */
+  private updateGoalPill(): void {
+    const g = this.game;
+    const target = g.goalTarget;
+    if (target !== this.lastGoalTarget) {
+      this.lastGoalTarget = target;
+      this.lastGoalValue = -1;
+      this.hudGoal.hidden = !target;
+      if (target) {
+        el('hud-goal-label').textContent = target.name;
+        this.goalPreview?.setSkin(target);
+        this.goalPreview?.fit();
+        this.goalPreview?.tick(0.001); // one still frame is enough for a 30 px icon
+      }
+    }
+    if (!target) return;
+    const value = Math.min(g.goalProgress, target.goal.n);
+    if (value !== this.lastGoalValue) {
+      this.lastGoalValue = value;
+      const num = el('hud-goal-num');
+      num.textContent = `${value} / ${target.goal.n}`;
+      num.dataset.unit = ` ${GOAL_UNIT[target.goal.type]}`; // shown by CSS, dropped on very narrow screens
+      el('hud-goal-fill').style.width = `${(value / target.goal.n) * 100}%`;
+    }
   }
 
   private updateCountdown(): void {
@@ -266,6 +358,7 @@ export class UI {
       case 'select-skin':
         g.selectSkin(target.dataset.skin ?? '');
         this.refreshSkins();
+        this.menuPreview?.setSkin(g.skin);
         break;
       case 'toggle-music':
         g.save.data.music = !g.save.data.music;

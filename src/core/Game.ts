@@ -6,7 +6,7 @@ import { Generator } from '../world/Generator';
 import { COIN } from '../world/Rect';
 import { World } from '../world/World';
 import { Loop } from './Loop';
-import { DEFAULT_SKIN, findSkin, newlyUnlocked, nextSkin, reconcileUnlocked, type Skin } from './skins';
+import { DEFAULT_SKIN, SKINS, findSkin, goalValue, newlyUnlocked, nextSkin, reconcileUnlocked, type Progress, type Skin } from './skins';
 import { Renderer } from '../render/Renderer';
 import { AudioSystem } from '../audio/AudioSystem';
 import { Particles } from '../render/Particles';
@@ -67,9 +67,17 @@ export class Game {
   onFrame: (() => void) | null = null;
 
   private readonly reducedMotion: boolean = false;
-  /** Smallest goal (m) not reached yet; the per-step check is one comparison. */
-  private nextGoal = Infinity;
+  /** Smallest distance goal (m) not reached yet; the per-step check is one comparison. */
+  private nextDistanceGoal = Infinity;
+  /** Obstacles dodged in this run (skin objectives), and how far through the world's mover list we are. */
+  saws = 0;
+  crushers = 0;
+  private moverIdx = 0;
+  private current: Skin = findSkin(DEFAULT_SKIN);
+  /** The skin shown in the HUD progress pill: the one closest to being earned, counting this run. */
+  goalTarget: Skin | null = null;
   private trailTick = 0;
+  private runTick = 0;
   private readonly generator = new Generator(this.world);
   private readonly input: Input;
   private readonly renderer: Renderer;
@@ -111,12 +119,12 @@ export class Game {
 
   /** Currently selected skin. */
   get skin(): Skin {
-    return findSkin(this.save.data.skin);
+    return this.current;
   }
 
-  /** Next locked skin and its distance goal, or null when all are unlocked. */
+  /** The locked skin closest to being earned, or null when all are unlocked. */
   get nextReward(): Skin | null {
-    return nextSkin(this.save.data.unlocked);
+    return nextSkin(this.save.data.unlocked, this.savedProgress());
   }
 
   get maxDist(): number {
@@ -125,6 +133,11 @@ export class Game {
 
   isUnlocked(id: string): boolean {
     return this.save.data.unlocked.includes(id);
+  }
+
+  /** How far along a skin's objective the player is, from what is saved (for menus). */
+  progressOf(skin: Skin): number {
+    return goalValue(skin.goal, this.savedProgress());
   }
 
   /** Menu action: wear an unlocked skin. */
@@ -136,30 +149,79 @@ export class Game {
   }
 
   private applySkin(): void {
-    const skin = this.skin;
-    this.view.setSkin(skin);
-    this.fx.setSkinColor(skin.color);
+    this.current = findSkin(this.save.data.skin);
+    this.view.setSkin(this.current);
+    this.fx.setSkin(this.current.color, this.current.trail);
+  }
+
+  /** Saved totals: best single run for distance, lifetime for everything else. */
+  private savedProgress(): Progress {
+    const d = this.save.data;
+    return { distance: d.maxDist, coins: d.coins, attempts: d.attempts, saws: d.saws, crushers: d.crushers };
+  }
+
+  /** Pick the skin for the HUD progress pill (called when a run starts and whenever one is unlocked). */
+  private refreshGoalTarget(): void {
+    this.goalTarget = nextSkin(this.save.data.unlocked, this.liveProgress());
+  }
+
+  /** Live value of the HUD target's objective (this run included), without allocating. */
+  get goalProgress(): number {
+    const t = this.goalTarget;
+    if (!t) return 0;
+    const d = this.save.data;
+    switch (t.goal.type) {
+      case 'distance': return this.distance;
+      case 'coins': return d.coins + this.coins;
+      case 'attempts': return d.attempts;
+      case 'saws': return d.saws + this.saws;
+      case 'crushers': return d.crushers + this.crushers;
+    }
+  }
+
+  /** Saved totals plus the run in progress, so objectives complete the moment they are met. */
+  private liveProgress(): Progress {
+    const d = this.save.data;
+    return {
+      distance: this.distance,
+      coins: d.coins + this.coins,
+      attempts: d.attempts,
+      saws: d.saws + this.saws,
+      crushers: d.crushers + this.crushers,
+    };
   }
 
   private reconcileSkins(): void {
     const d = this.save.data;
-    d.unlocked = reconcileUnlocked(d.unlocked, d.maxDist);
+    d.unlocked = reconcileUnlocked(d.unlocked, this.savedProgress());
     if (!d.unlocked.includes(d.skin)) d.skin = DEFAULT_SKIN;
-    this.nextGoal = this.nextReward?.goal ?? Infinity;
+    this.refreshDistanceGoal();
+    this.refreshGoalTarget();
     this.applySkin();
   }
 
-  /** Unlock every skin whose distance goal this run just reached. */
-  private checkGoals(): void {
+  private refreshDistanceGoal(): void {
+    let next = Infinity;
+    for (const s of SKINS) {
+      if (s.goal.type === 'distance' && s.goal.n > 0 && !this.isUnlocked(s.id)) next = Math.min(next, s.goal.n);
+    }
+    this.nextDistanceGoal = next;
+  }
+
+  /** Unlock every skin whose objective the run in progress has just met. */
+  private checkUnlocks(): void {
     const d = this.save.data;
-    for (const skin of newlyUnlocked(this.distance, d.unlocked)) {
+    const earned = newlyUnlocked(this.liveProgress(), d.unlocked);
+    if (earned.length === 0) return;
+    for (const skin of earned) {
       d.unlocked.push(skin.id);
-      d.maxDist = Math.max(d.maxDist, skin.goal);
+      if (skin.goal.type === 'distance') d.maxDist = Math.max(d.maxDist, skin.goal.n);
       this.unlockedNow.push(skin);
       this.audio.sfx('record');
       this.onUnlock?.(skin);
     }
-    this.nextGoal = this.nextReward?.goal ?? Infinity;
+    this.refreshDistanceGoal();
+    this.refreshGoalTarget();
     this.save.flush(); // don't lose the reward if the tab is closed mid-run
   }
 
@@ -188,6 +250,8 @@ export class Game {
     this.player.speed = speedAt(0);
     this.difficulty = 0;
     this.distance = this.coins = this.score = 0;
+    this.saws = this.crushers = 0;
+    this.moverIdx = 0;
     this.deadTime = 0;
     this.newRecord = false;
     this.fx.clear();
@@ -206,6 +270,8 @@ export class Game {
     this.unlockedNow.length = 0;
     this.save.data.attempts++;
     this.setState('playing');
+    this.checkUnlocks(); // "play N games" objectives
+    this.refreshGoalTarget();
   }
 
   /** Start a new run right away (from the menu or after dying). */
@@ -282,10 +348,24 @@ export class Game {
     this.distance = Math.max(0, Math.floor(p.x));
     this.score = this.distance + this.coins * COIN_VALUE;
     this.checkRecord();
-    if (this.distance >= this.nextGoal) this.checkGoals();
+    if (this.distance >= this.nextDistanceGoal || this.countDodged()) this.checkUnlocks();
     this.generator.ensureAhead(p.x + GEN_AHEAD);
     this.world.prune(p.x - KEEP_BEHIND);
     if (p.dead) this.die();
+  }
+
+  /** Count movers the runner has just passed; true if any were. */
+  private countDodged(): boolean {
+    const w = this.world;
+    const x = this.player.x - 0.6;
+    let any = false;
+    while (this.moverIdx < w.moverX.length && w.moverX[this.moverIdx]! < x) {
+      if (w.moverIsCrusher[this.moverIdx]) this.crushers++;
+      else this.saws++;
+      this.moverIdx++;
+      any = true;
+    }
+    return any;
   }
 
   /** Turn this step's physics events into particles and character animation. */
@@ -300,7 +380,9 @@ export class Game {
       this.fx.land(p.x, p.y, p.landSpeed);
       this.view.land(p.landSpeed);
     }
-    if (!p.grounded && ++this.trailTick % 5 === 0) this.fx.trail(p.x - 0.2, p.y + 0.4);
+    if ((!p.grounded || this.current.trail?.ground) && ++this.trailTick % 5 === 0) this.fx.trail(p.x - 0.2, p.y + (p.grounded ? 0.15 : 0.4));
+    // Skins that already leave a ground trail don't need the plain dust on top of it.
+    if (p.grounded && !this.current.trail?.ground && ++this.runTick % 8 === 0) this.fx.run(p.x - 0.35, p.y);
   }
 
   private collectCoins(): void {
@@ -312,6 +394,7 @@ export class Game {
       this.coins++;
       this.audio.coin();
       this.fx.coin((c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2);
+      this.checkUnlocks(); // "collect N coins" objectives
     }
   }
 
@@ -338,6 +421,8 @@ export class Game {
   private commitRun(): void {
     const d = this.save.data;
     d.coins += this.coins;
+    d.saws += this.saws;
+    d.crushers += this.crushers;
     d.maxDist = Math.max(d.maxDist, this.distance);
     if (this.score > d.best) {
       d.best = this.score;

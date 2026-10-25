@@ -2,7 +2,9 @@ import { PLAYER_HEIGHT } from '../physics/constants';
 import type { Game } from '../core/Game';
 import { COIN, HAZARD, SOLID, WAVE_SLAM, moverCycle, moverLift, type Rect } from '../world/Rect';
 import { Confetti } from './Confetti';
-import { GOALS, GOAL_SKIN_IDS } from '../core/skins';
+import { hash } from './hash';
+import { GroundPainter } from './Ground';
+import { DISTANCE_GOALS } from '../core/skins';
 import { THEMES, ThemeBlender } from './themes';
 
 /**
@@ -21,11 +23,6 @@ const MAX_PIXELS = 4_200_000;
 const GROUND_DEPTH = -1;
 
 const DASH: number[] = [10, 10];
-
-const hash = (i: number): number => {
-  const s = Math.sin(i * 127.1 + 311.7) * 43758.5453;
-  return s - Math.floor(s);
-};
 
 /**
  * Draws the world with a fixed tile-based camera: themed sky, parallax layers, geometry,
@@ -46,6 +43,16 @@ export class Renderer {
   /** Seconds left on the "new record" banner. */
   private bannerT = 0;
   private readonly theme = new ThemeBlender();
+  private readonly ground = new GroundPainter();
+  /**
+   * Adaptive quality: if frames stay slow for a while (a weak phone) the ground drops its decoration;
+   * if they get fast again for a longer while it comes back. Thresholds sit below 30 fps so a
+   * display capped at 30 Hz is not mistaken for a struggling device.
+   */
+  lite = false;
+  private frameEma = 1 / 60;
+  private slowFor = 0;
+  private fastFor = 0;
   private skyGrad: CanvasGradient | null = null;
   private skyVersion = -1;
   private readonly visible: Rect[] = [];
@@ -73,6 +80,21 @@ export class Renderer {
     this.skyVersion = -1; // gradient depends on canvas height
   }
 
+  private trackPerformance(dt: number): void {
+    this.frameEma += (dt - this.frameEma) * 0.05;
+    if (this.frameEma > 0.036) {
+      this.slowFor += dt;
+      this.fastFor = 0;
+    } else if (this.frameEma < 0.025) {
+      this.fastFor += dt;
+      this.slowFor = 0;
+    } else {
+      this.slowFor = this.fastFor = 0;
+    }
+    if (!this.lite && this.slowFor > 1.5) this.lite = true;
+    else if (this.lite && this.fastFor > 8) this.lite = false;
+  }
+
   private X(x: number): number {
     return (x - this.camX) * this.scale;
   }
@@ -82,6 +104,7 @@ export class Renderer {
   }
 
   render(game: Game, alpha: number, frameDt: number, fps: number): void {
+    if (frameDt > 0 && frameDt < 0.2) this.trackPerformance(frameDt);
     const { ctx, scale } = this;
     const p = game.player;
     const px = p.prevX + (p.x - p.prevX) * alpha;
@@ -234,24 +257,8 @@ export class Renderer {
     const vis = this.visible;
     game.world.collect(this.camX - 1, this.camX + this.viewW + 1, vis);
 
-    // Ground slabs with a bright lip and faint 2-tile stripes that sell the speed.
-    for (let i = 0; i < vis.length; i++) {
-      const r = vis[i]!;
-      if (r.kind !== SOLID || r.y0 > GROUND_DEPTH) continue;
-      const x = this.X(r.x0);
-      const wpx = (r.x1 - r.x0) * scale;
-      const top = this.Y(r.y1);
-      ctx.fillStyle = c.ground;
-      ctx.fillRect(x, top, wpx, this.h - top + 40);
-      ctx.fillStyle = 'rgba(0,0,0,0.10)';
-      const from = Math.max(r.x0, this.camX - 1);
-      const to = Math.min(r.x1, this.camX + this.viewW + 1);
-      for (let sx = Math.ceil(from / 2) * 2; sx < to; sx += 2) {
-        ctx.fillRect(this.X(sx) - 1, top, 2, this.h - top + 40);
-      }
-      ctx.fillStyle = c.groundTop;
-      ctx.fillRect(x, top, wpx, Math.max(3, scale * 0.14));
-    }
+    // Ground: depth gradient, strata, lit lip, cliff edges and the living decoration of each world.
+    this.ground.draw(ctx, vis, this.theme, game.time, this.camX, scale, this.groundPx, this.w, this.h, GROUND_DEPTH, this.lite);
 
     // Blocks and floating platforms.
     for (let i = 0; i < vis.length; i++) {
@@ -336,17 +343,18 @@ export class Renderer {
       ctx.font = `800 ${Math.round(scale * 0.42)}px system-ui, sans-serif`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      for (let i = 0; i < GOALS.length; i++) {
-        const gx = this.X(GOALS[i]!);
+      for (let i = 0; i < DISTANCE_GOALS.length; i++) {
+        const goal = DISTANCE_GOALS[i]!;
+        const gx = this.X(goal.n);
         if (gx < -scale * 3 || gx > this.w + scale) continue;
-        const reached = game.isUnlocked(GOAL_SKIN_IDS[i]!);
+        const reached = game.isUnlocked(goal.id);
         ctx.strokeStyle = reached ? 'rgba(255,255,255,0.35)' : 'rgba(255,210,63,0.85)';
         ctx.fillStyle = ctx.strokeStyle;
         ctx.beginPath();
         ctx.moveTo(gx, this.groundPx);
         ctx.lineTo(gx, this.groundPx - scale * 6);
         ctx.stroke();
-        ctx.fillText(`${GOALS[i]} m`, gx + scale * 0.2, this.groundPx - scale * 6);
+        ctx.fillText(`${goal.n} m`, gx + scale * 0.2, this.groundPx - scale * 6);
       }
       ctx.setLineDash([]);
     }
@@ -438,6 +446,14 @@ export class Renderer {
     const p = game.player;
     if (p.dead) return;
     const size = this.scale;
+    // A soft shadow on the ground under the runner (smaller and fainter the higher it jumps).
+    if (py < 4 && game.world.overlap(px - 0.3, -0.6, px + 0.3, -0.4, SOLID)) {
+      const k = 1 - py / 4;
+      this.ctx.fillStyle = `rgba(0,0,0,${(0.3 * k).toFixed(3)})`;
+      this.ctx.beginPath();
+      this.ctx.ellipse(this.X(px), this.groundPx + size * 0.06, size * 0.46 * (0.55 + 0.45 * k), size * 0.09, 0, 0, 6.283);
+      this.ctx.fill();
+    }
     // The sprite (1×1) is slightly larger than the hitbox (0.8): centre it on the hitbox.
     const foot = this.Y(py) + (size - PLAYER_HEIGHT * size) / 2;
     game.view.draw(this.ctx, this.X(px), foot, size, !p.grounded);
@@ -475,7 +491,7 @@ export class Renderer {
     ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
     ctx.fillText(
-      `${fps.toFixed(0)} fps  v=${p.speed.toFixed(1)}  d=${game.difficulty.toFixed(2)}  world=${THEMES[this.theme.a]!.name}`,
+      `${fps.toFixed(0)} fps  v=${p.speed.toFixed(1)}  d=${game.difficulty.toFixed(2)}  world=${THEMES[this.theme.a]!.name}${this.lite ? ' LITE' : ''}`,
       this.w - 8,
       8,
     );

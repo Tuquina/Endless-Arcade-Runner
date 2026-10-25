@@ -78,6 +78,17 @@ Cada mundo (400 m, con su propia paleta) favorece unos obstáculos: Neón pincho
 Océano sierras, Bosque plataformas y techos, Vacío prensas. Después de 2400 m, la *presión* sigue subiendo
 (descansos más cortos, más gauntlets) aunque la velocidad ya esté al máximo.
 
+**Pinchos seguidos:** los tríos de pinchos solo aparecen con algo de dificultad (≥0,4; los cuádruples ≥0,9) y la
+métrica de justicia mide la ventana *decisiva* de salto (≥150 ms con la hitbox real, que es más chica que el
+dibujo), así que ya no exigen el píxel exacto.
+
+### Suelo y HUD
+
+El suelo (`src/render/Ground.ts`) tiene franja de profundidad, estratos y piedras con parallax, un borde superior
+con luz, vegetación animada por mundo y paredes en los pozos. Si los cuadros se mantienen lentos (celular
+débil) baja solo a una versión sin decoración y vuelve cuando se recupera. En partida el HUD muestra los metros
+en vivo y el progreso hacia la próxima skin.
+
 ### Obstáculos móviles y por qué siempre se pueden pasar
 
 El movimiento de una sierra o una prensa depende de **la posición del corredor** (no de un reloj), así que cada
@@ -90,7 +101,21 @@ para saltar es de tamaño humano. El generador solo usa variantes de esa tabla (
 cada 1000 m). Los tests comprueban que la tabla está al día: **si editás un segmento marcado `validate`,
 ejecutá `npm run gen:variants` (~2 min) y commiteá el resultado**.
 
-## Desafíos y aspectos
+## Aspectos y objetivos
 
-Llegar a 250, 500, 1000, 2000 y 5000 m en una sola partida desbloquea aspectos del personaje
-(solo cosmético; no cambia la hitbox ni los controles).
+18 aspectos (solo cosméticos: no cambian la hitbox ni los controles), cada uno con su propio diseño: patrón en el
+cuerpo, cara, accesorios animados, efectos y una estela de partículas propia (brasas, burbujas, estrellas, humo,
+copos, píxeles…). Se desbloquean con objetivos de cinco tipos, así que no todo se resuelve corriendo más lejos:
+
+| Tipo | Ejemplos |
+|---|---|
+| Distancia en una partida | 250 m Menta · 500 Rosa · 750 Tigre · 1000 Gafas · 1500 Ninja · 2000 Arcoíris · 3000 Fuego · 4000 Astronauta · 5000 Rey · 8000 Diamante |
+| Monedas (total) | 100 Panda · 300 Rana · 800 Mago |
+| Partidas jugadas | 40 Robot · 150 Fantasma |
+| Sierras esquivadas | 40 Hielo |
+| Prensas pasadas | 25 Glitch |
+
+Los objetivos se cumplen en el momento (aviso en pantalla y guardado inmediato), el menú muestra el aspecto más
+cercano a completarse, y las metas de distancia aparecen como puertas doradas en el mundo.
+Un aspecto es un dato en `src/core/skins.ts`; `src/render/PlayerView.ts` sabe dibujar los patrones, caras y
+accesorios, y los previews del menú usan ese mismo código. Para agregar uno basta una entrada nueva en `SKINS`.

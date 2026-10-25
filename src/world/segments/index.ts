@@ -12,7 +12,9 @@ export const PREFABS: Prefab[] = [
     build(b) { b.spikes(0, 2); b.width = 2; },
   },
   {
-    id: 'spike3', mechanic: 'spike', minD: 0.12, maxD: 1,
+    // Three spikes in a row need a long held jump: the window is only human-sized from d ≈ 0.4 up
+    // (higher speed carries the runner further while it is above the spikes).
+    id: 'spike3', mechanic: 'spike', minD: 0.4, maxD: 1, weight: 0.7,
     build(b) { b.spikes(0, 3); b.width = 3; },
   },
   {
@@ -25,7 +27,7 @@ export const PREFABS: Prefab[] = [
     },
   },
   {
-    id: 'spike4', mechanic: 'spike', minD: 0.4, maxD: 1,
+    id: 'spike4', mechanic: 'spike', minD: 0.9, maxD: 1, weight: 0.5,
     build(b) { b.spikes(0, 4); b.width = 4; },
   },
 
@@ -97,8 +99,8 @@ export const PREFABS: Prefab[] = [
     build(b) {
       b.platform(0, 3, 1.0);
       b.spikes(3, 2);
-      b.platform(3, 2, 2.0);
-      b.width = 5;
+      b.platform(3, 2.6, 1.8);
+      b.width = 5.6;
     },
   },
 
@@ -114,7 +116,15 @@ export const PREFABS: Prefab[] = [
   },
   {
     id: 'spikeBlockSpike', mechanic: 'combo', minD: 0.2, maxD: 1,
-    build(b) { b.spikes(0, 1); b.block(4, 2, 1.5); b.spikes(9, 1); b.width = 10; },
+    // The recovery space after the block grows with speed, so the second spike is never a scramble.
+    build(b, _r, d) {
+      const before = 5 + 2.5 * d; // landing room between the first spike and the block…
+      const after = 3.2 + 3.2 * d; // …and between the block and the second spike
+      b.spikes(0, 1);
+      b.block(before, 2, 1.5);
+      b.spikes(before + 2 + after, 1);
+      b.width = before + 3 + after;
+    },
   },
   {
     id: 'rhythm', mechanic: 'combo', minD: 0.4, maxD: 1,
@@ -145,8 +155,8 @@ export const PREFABS: Prefab[] = [
   },
   {
     id: 'blockHop', mechanic: 'block', minD: 0.45, maxD: 1,
-    build(b, r) {
-      const gap = r.range(2.5, 3.2);
+    build(b, r, d) {
+      const gap = r.range(3.2, 3.8) + 1.0 * d; // more room between the stepping blocks as speed rises
       b.block(0, 1.5, 1);
       b.block(1.5 + gap, 1.5, 1);
       b.block(3 + 2 * gap, 1.5, 1);
@@ -174,10 +184,11 @@ export const PREFABS: Prefab[] = [
     build(b, r, d) {
       const w1 = r.range(2, 2.4 + 1.2 * d);
       const w2 = r.range(2, 2.4 + 1.2 * d);
+      const island = 6 + 1.6 * d; // room to land, hop the spike, and take off again
       b.pit(0, w1);
-      b.spikes(w1 + 2.5, 1);
-      b.pit(w1 + 5, w2);
-      b.width = w1 + 5 + w2;
+      b.spikes(w1 + island / 2 - 0.5, 1);
+      b.pit(w1 + island, w2);
+      b.width = w1 + island + w2;
     },
   },
   {
@@ -209,13 +220,15 @@ export const PREFABS: Prefab[] = [
   {
     id: 'lowCeilSpikes', mechanic: 'ceiling', minD: 0, maxD: 1, validate: true,
     build(b, r) {
-      b.spikes(1, 1);
-      b.ceiling(0, 3.5, r.range(2.0, 2.4));
-      b.width = 3.5;
+      // The ceiling only cuts the highest (fully held) jumps, so the jump has to be judged, not maxed.
+      const n = r.int(1, 2);
+      b.spikes(1, n);
+      b.ceiling(0, n + 3, r.range(2.5, 2.9));
+      b.width = n + 3;
     },
   },
   {
-    id: 'tunnel', mechanic: 'ceiling', minD: 0.3, maxD: 1, validate: true,
+    id: 'tunnel', mechanic: 'ceiling', minD: 0.3, maxD: 0.75, validate: true, // at full speed the held jump leaves no human-sized window under the roof
     build(b, r) {
       b.ceiling(0, 8, r.range(2.1, 2.5));
       b.spikes(3.5, 1);
@@ -246,7 +259,7 @@ export const PREFABS: Prefab[] = [
     },
   },
   {
-    id: 'orbSpikes', mechanic: 'mover', minD: 0.3, maxD: 1, validate: true,
+    id: 'orbSpikes', mechanic: 'mover', minD: 0.5, maxD: 1, validate: true,
     build(b, r, d) {
       // A slow, high saw above the spikes: the jump has to happen while it is lifted.
       b.spikes(0, 2);
@@ -255,11 +268,12 @@ export const PREFABS: Prefab[] = [
     },
   },
   {
-    id: 'orbPit', mechanic: 'mover', minD: 0.4, maxD: 1, validate: true,
+    id: 'orbPit', mechanic: 'mover', minD: 0.55, maxD: 1, validate: true,
     build(b, r, d) {
-      const w = r.range(3, 3.6);
+      // The saw swings above the pit: a normal jump passes under it, a fully held one can hit it.
+      const w = r.range(3.2, 3.8);
       b.pit(0, w);
-      b.orb(w / 2, 1.0, r.range(1.2, 1.8), (7 - 2 * d) * r.range(0.9, 1.1), r.next());
+      b.orb(w / 2, 2.6, r.range(1.2, 1.6), (9 - 2 * d) * r.range(0.9, 1.1), r.next());
       b.width = w;
     },
   },
@@ -299,8 +313,8 @@ export const PREFABS: Prefab[] = [
   {
     id: 'gauntlet', mechanic: 'gauntlet', minD: 0, maxD: 1, validate: true, weight: 1.5,
     build(b, r, d) {
-      const count = r.int(3, 4);
-      const spacing = r.range(5, 6.5) - 1.2 * d;
+      const count = r.int(2, 3);
+      const spacing = r.range(6.5, 8) + 1.5 * d; // recovery room between the pieces grows with speed
       let x = 0;
       for (let i = 0; i < count; i++) {
         switch (r.int(0, 4)) {
