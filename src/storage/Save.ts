@@ -1,10 +1,22 @@
+import { DEFAULT_DIFFICULTY, isDifficultyId, type DifficultyId } from '../world/Difficulty';
+import { DEFAULT_MODE, isGameMode, type GameMode } from '../core/modes';
+
+/** Best run in one difficulty. */
+export interface BestRecord {
+  /** Best score (distance + coin bonus). */
+  best: number;
+  /** Distance reached in that run, for the "ghost" marker. */
+  bestDist: number;
+}
+
 /** Persistent player data. Bump `v` and extend `migrate` when the shape changes. */
 export interface SaveData {
   v: 1;
-  /** Best score (distance + coin bonus). */
-  best: number;
-  /** Distance reached in the best run, for the "ghost" marker. */
-  bestDist: number;
+  /** Records are kept per difficulty. */
+  records: { [K in DifficultyId]: BestRecord };
+  /** Last chosen game mode and endless difficulty. */
+  mode: GameMode;
+  difficulty: DifficultyId;
   attempts: number;
   /** Lifetime coins. */
   coins: number;
@@ -29,19 +41,32 @@ export interface StorageLike {
   setItem(key: string, value: string): void;
 }
 
-const defaults = (): SaveData => ({ v: 1, best: 0, bestDist: 0, attempts: 0, coins: 0, music: true, sfx: true, maxDist: 0, saws: 0, crushers: 0, skin: 'classic', unlocked: ['classic'] });
+const emptyRecords = (): SaveData['records'] => ({ easy: { best: 0, bestDist: 0 }, normal: { best: 0, bestDist: 0 }, hard: { best: 0, bestDist: 0 } });
+
+const defaults = (): SaveData => ({ v: 1, records: emptyRecords(), mode: DEFAULT_MODE, difficulty: DEFAULT_DIFFICULTY, attempts: 0, coins: 0, music: true, sfx: true, maxDist: 0, saws: 0, crushers: 0, skin: 'classic', unlocked: ['classic'] });
 
 /** Non-negative finite integer, else the fallback. Guards against hand-edited or corrupt storage. */
 function count(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback;
 }
 
+type Record_ = { [k: string]: { best?: unknown; bestDist?: unknown } | undefined };
+
 function migrate(raw: unknown): SaveData {
   const out = defaults();
   if (typeof raw === 'object' && raw !== null) {
     const o = raw as Record<string, unknown>;
-    out.best = count(o.best, 0);
-    out.bestDist = count(o.bestDist, 0);
+    // Saves from before difficulties kept a single record: it belongs to Normal.
+    out.records.normal = { best: count(o.best, 0), bestDist: count(o.bestDist, 0) };
+    if (typeof o.records === 'object' && o.records !== null) {
+      const rec = o.records as Record_;
+      for (const id of Object.keys(out.records) as DifficultyId[]) {
+        const r = rec[id];
+        if (r && typeof r === 'object') out.records[id] = { best: count(r.best, 0), bestDist: count(r.bestDist, 0) };
+      }
+    }
+    if (isGameMode(o.mode)) out.mode = o.mode;
+    if (isDifficultyId(o.difficulty)) out.difficulty = o.difficulty;
     out.attempts = count(o.attempts, 0);
     out.coins = count(o.coins, 0);
     out.music = typeof o.music === 'boolean' ? o.music : true;
@@ -98,9 +123,8 @@ export class Save {
       if (text) {
         const other = migrate(JSON.parse(text));
         const d = this.data;
-        if (other.best > d.best) {
-          d.best = other.best;
-          d.bestDist = other.bestDist;
+        for (const id of Object.keys(d.records) as DifficultyId[]) {
+          if (other.records[id].best > d.records[id].best) d.records[id] = { ...other.records[id] };
         }
         d.maxDist = Math.max(d.maxDist, other.maxDist);
         d.attempts = Math.max(d.attempts, other.attempts);

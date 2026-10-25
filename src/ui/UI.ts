@@ -1,4 +1,6 @@
 import type { Game } from '../core/Game';
+import { DIFFICULTY_INFO, GAME_MODES } from '../core/modes';
+import { DIFFICULTY_IDS, type DifficultyId } from '../world/Difficulty';
 import { GOAL_UNIT, SKINS, goalText, type Skin } from '../core/skins';
 import { SkinPreview } from './SkinPreview';
 import './ui.css';
@@ -66,6 +68,7 @@ export class UI {
     game.onFrame = () => this.updateHud();
     game.onUnlock = (skin) => this.showToast(skin);
     this.buildSkins();
+    this.buildModes();
     this.menuPreview = new SkinPreview(el<HTMLCanvasElement>('menu-skin'), game.skin);
     this.goalPreview = new SkinPreview(el<HTMLCanvasElement>('hud-goal-skin'), game.skin);
     this.refreshToggles();
@@ -87,6 +90,7 @@ export class UI {
     }
     if (g.state === 'menu') {
       el('menu-best').textContent = String(g.best);
+      this.refreshModes();
       this.refreshGoal();
     }
     this.hud.dataset.show = String(g.state !== 'menu' && g.state !== 'dead');
@@ -149,6 +153,7 @@ export class UI {
     el('dead-score').textContent = String(g.score);
     el('dead-dist').textContent = String(g.distance);
     el('dead-best').textContent = String(g.best);
+    el('dead-diff').textContent = `${GAME_MODES[0]!.name} · ${DIFFICULTY_INFO[g.difficultyId].name}`;
     el('dead-coins').textContent = String(g.coins);
     el('dead-record').hidden = !g.newRecord;
 
@@ -162,6 +167,43 @@ export class UI {
   }
 
   /** Menu progress bar towards the skin that is closest to being earned. */
+  /** Game-mode chips (the unavailable ones are shown but disabled) and the difficulty selector. */
+  private buildModes(): void {
+    const row = el('mode-row');
+    for (const m of GAME_MODES) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mode-chip';
+      b.dataset.action = 'select-mode';
+      b.dataset.mode = m.id;
+      b.disabled = !m.available;
+      b.innerHTML = `<b>${m.name}</b><small>${m.available ? m.blurb : 'Próximamente'}</small>`;
+      row.append(b);
+    }
+    const seg = el('diff-row');
+    for (const id of DIFFICULTY_IDS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'seg-btn';
+      b.dataset.action = 'select-difficulty';
+      b.dataset.difficulty = id;
+      b.setAttribute('role', 'radio');
+      b.textContent = DIFFICULTY_INFO[id].name;
+      seg.append(b);
+    }
+  }
+
+  private refreshModes(): void {
+    const g = this.game;
+    for (const b of el('mode-row').querySelectorAll<HTMLElement>('.mode-chip')) {
+      b.setAttribute('aria-pressed', String(b.dataset.mode === g.mode));
+    }
+    for (const b of el('diff-row').querySelectorAll<HTMLElement>('.seg-btn')) {
+      b.setAttribute('aria-checked', String(b.dataset.difficulty === g.difficultyId));
+    }
+    el('diff-hint').textContent = DIFFICULTY_INFO[g.difficultyId].blurb;
+  }
+
   private refreshGoal(): void {
     const g = this.game;
     const next = g.nextReward;
@@ -354,6 +396,9 @@ export class UI {
         this.settingsOpen = false;
         this.skinsOpen = false;
         this.applyScreen();
+        break;
+      case 'select-difficulty':
+        g.setDifficulty((target.dataset.difficulty ?? 'normal') as DifficultyId);
         break;
       case 'select-skin':
         g.selectSkin(target.dataset.skin ?? '');

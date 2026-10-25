@@ -360,7 +360,7 @@ export class Renderer {
     }
 
     // Marker for the personal best distance.
-    const bd = game.save.data.bestDist;
+    const bd = game.bestDist;
     if (bd > 0 && game.state !== 'menu') {
       const bx = this.X(bd);
       if (bx > -scale && bx < this.w + scale) {
