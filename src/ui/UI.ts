@@ -6,12 +6,15 @@ import { gradeOf, popcount } from '../rhythm/RhythmRun';
 import { DIFFICULTY_IDS, type DifficultyId } from '../world/Difficulty';
 import { GOAL_UNIT, SKINS, goalText, type Skin } from '../core/skins';
 import { SkinPreview } from './SkinPreview';
+import { TapCounter } from './tapCounter';
 import './ui.css';
 
 type ScreenName = 'menu' | 'pause' | 'dead' | 'settings' | 'skins' | 'levels' | 'rdead' | 'complete';
 
 /** Delay before the game-over screen appears, so the death itself is visible first. */
 const DEAD_SCREEN_DELAY_MS = 450;
+/** Taps on the menu character that unlock everything for the session (the easter egg). */
+const SECRET_TAPS = 11;
 /** The results of a finished level wait for the confetti a moment longer. */
 const COMPLETE_SCREEN_DELAY_MS = 900;
 /** Seconds per number of the resume countdown (must match Game's RESUME_COUNTDOWN / 3). */
@@ -39,6 +42,7 @@ export class UI {
     complete: el('screen-complete'),
   };
   private levelsOpen = false;
+  private readonly secretTaps = new TapCounter();
   private lastPct = -1;
   private lastCombo = -1;
   private readonly toast = el('toast');
@@ -74,6 +78,7 @@ export class UI {
   constructor(private readonly game: Game) {
     this.root.addEventListener('click', this.onClick);
     this.root.addEventListener('pointerdown', this.onPointerDown);
+    el('menu-skin').addEventListener('pointerdown', this.onCharacterTap);
     window.addEventListener('keydown', this.onKey);
     game.onState = () => this.sync();
     game.onFrame = () => this.updateHud();
@@ -103,6 +108,7 @@ export class UI {
         this.applyScreen();
       }, state === 'complete' ? COMPLETE_SCREEN_DELAY_MS : DEAD_SCREEN_DELAY_MS);
     }
+    el('cheat-badge').hidden = !g.cheats;
     if (g.state === 'menu') {
       el('menu-best').textContent = String(g.best);
       this.refreshModes();
@@ -361,10 +367,14 @@ export class UI {
   }
 
   private showToast(skin: Skin): void {
-    this.toast.textContent = `¡Aspecto desbloqueado: ${skin.name}! ${goalText(skin.goal)}`;
+    this.showMessage(`¡Aspecto desbloqueado: ${skin.name}! ${goalText(skin.goal)}`);
+  }
+
+  private showMessage(text: string, ms = 3200): void {
+    this.toast.textContent = text;
     this.toast.classList.add('show');
     window.clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => this.toast.classList.remove('show'), 3200);
+    this.toastTimer = window.setTimeout(() => this.toast.classList.remove('show'), ms);
   }
 
   /** Cards are created once; `refreshSkins` only flips their state. */
@@ -506,6 +516,28 @@ export class UI {
     el('latency-val').textContent = `${d.latency > 0 ? '+' : ''}${d.latency} ms`;
   }
 
+  /** Easter egg: tapping the menu character quickly 11 times unlocks everything for this session. */
+  private onCharacterTap = (e: PointerEvent): void => {
+    const g = this.game;
+    if (g.state !== 'menu' || this.levelsOpen || this.skinsOpen || this.settingsOpen) return;
+    e.preventDefault();
+    const n = this.secretTaps.tap(performance.now());
+    const art = el('menu-skin');
+    art.classList.remove('poke');
+    void art.offsetWidth; // restart the squash animation
+    art.classList.add('poke');
+    if (g.cheats) return;
+    g.audio.sfx('coin', n);
+    if (n >= SECRET_TAPS) {
+      this.secretTaps.reset();
+      g.setCheats(true);
+      this.refreshSkins();
+      this.showMessage('¡Modo secreto! Todos los aspectos y niveles desbloqueados en esta sesión.');
+    } else if (n >= 6) {
+      this.showMessage(`${SECRET_TAPS - n}…`, 600);
+    }
+  };
+
   /** Retry fires on pointerdown (not click) so game over → running again feels instant. */
   private onPointerDown = (e: PointerEvent): void => {
     const target = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
@@ -531,6 +563,12 @@ export class UI {
         } else {
           g.play();
         }
+        break;
+      case 'cheats-off':
+        g.setCheats(false);
+        this.refreshSkins();
+        this.menuPreview?.setSkin(g.skin);
+        this.showMessage('Modo secreto desactivado: volviste a tu progreso real.');
         break;
       case 'select-mode':
         g.setMode((target.dataset.mode ?? 'endless') as GameMode);

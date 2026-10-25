@@ -209,6 +209,13 @@ alrededor del vuelo ideal, con un margen arriba y abajo. Los tests recorren los 
 errores aleatorios de ±40 ms (también al soltar en la nave), adelantados o atrasados 40 ms y con toques cortos o
 largos.
 
+## Secreto
+
+Tocar **11 veces seguidas al personaje del menú** (sin pausas de más de ~0,65 s) activa el *modo secreto*: todos
+los aspectos y todos los niveles quedan disponibles **solo durante la sesión** (`sessionStorage`; nada se escribe
+en el guardado). El menú muestra un cartel "Modo secreto activo" que lo desactiva y vuelve al progreso real; el
+progreso hecho mientras tanto (récords, monedas, niveles completados) sí se guarda.
+
 ## Aspectos y objetivos
 
 21 aspectos (solo cosméticos: no cambian la hitbox ni los controles), cada uno con su propio diseño: patrón en el
