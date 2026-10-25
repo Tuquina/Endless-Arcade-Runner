@@ -277,9 +277,9 @@ const hipervelocidad: Song = {
 };
 
 export const GRAVITY_LEVELS: readonly LevelDef[] = [
-  { id: 'himno-alegria', name: 'Himno de la Alegría', blurb: 'Beethoven · portales de gravedad.', song: himno, speed: 10, theme: 3, tier: 2, guides: true, ceiling: CEILING },
-  { id: 'can-can', name: 'Can-Can', blurb: 'Offenbach · la bola que salta de piso a techo.', song: cancan, speed: 11, theme: 1, tier: 3, ceiling: CEILING },
-  { id: 'rey-montana', name: 'Rey de la Montaña', blurb: 'Grieg en trap · volá con la nave.', song: reyMontana, speed: 11.5, theme: 4, tier: 4, ceiling: CEILING },  { id: 'voltaje', name: 'Voltaje', blurb: 'Electro house · velocidad, onda y todo a la vez.', song: voltaje, speed: 11.5, theme: 0, tier: 5, ceiling: CEILING },
+  { id: 'himno-alegria', name: 'Himno de la Alegría', blurb: 'Portales de gravedad.', song: himno, speed: 10, theme: 3, tier: 2, guides: true, ceiling: CEILING },
+  { id: 'can-can', name: 'Can-Can', blurb: 'La bola que salta de piso a techo.', song: cancan, speed: 11, theme: 1, tier: 3, ceiling: CEILING },
+  { id: 'rey-montana', name: 'Rey de la Montaña', blurb: 'En trap: volá con la nave.', song: reyMontana, speed: 11.5, theme: 4, tier: 4, ceiling: CEILING },  { id: 'voltaje', name: 'Voltaje', blurb: 'Electro house · velocidad, onda y todo a la vez.', song: voltaje, speed: 11.5, theme: 0, tier: 5, ceiling: CEILING },
   { id: 'hipervelocidad', name: 'Hipervelocidad', blurb: 'Drum & bass que acelera hasta 180 BPM.', song: hipervelocidad, speed: 12, theme: 2, tier: 5, ceiling: CEILING },
 ];
 

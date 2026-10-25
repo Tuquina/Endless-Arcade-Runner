@@ -1500,3 +1500,62 @@
     align-self: center;
   }
 }
+
+/* Secret level just earned: a pulsing dot on its tab until it is opened once. */
+.mode-chip[data-mode='secret'] {
+  position: relative;
+}
+.mode-chip[data-new='true']::after {
+  content: '';
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 0 2px rgba(18, 12, 46, 0.9);
+  animation: new-dot 1.2s ease-in-out infinite;
+}
+@keyframes new-dot {
+  50% {
+    transform: scale(1.35);
+  }
+}
+
+/* ---------- polish ---------- */
+/* Pause, game over and level complete float over the run: a scrim darkens the lower half (where the ground
+   line and the obstacles are) so nothing bright cuts through the buttons; the sky stays visible as context. */
+#screen-pause,
+#screen-dead,
+#screen-rdead,
+#screen-complete {
+  background: linear-gradient(180deg, rgba(18, 12, 46, 0.45) 0%, rgba(18, 12, 46, 0.7) 45%, rgba(14, 9, 36, 0.93) 68%);
+}
+/* Long skin grid: Volver stays reachable without scrolling to the end. */
+.btn-sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: rgba(30, 22, 66, 0.92);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18), 0 -0.6rem 1.4rem rgba(14, 9, 36, 0.85);
+}
+/* Level cards: room for tier and blurb on two lines instead of cutting them. */
+.level-meta {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.3;
+}
+.toggle-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+.toggle-text small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}

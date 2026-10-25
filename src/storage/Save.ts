@@ -38,6 +38,10 @@ export interface SaveData {
   gravityLevel: number;
   /** Longest run (m) in the secret mode. */
   secretBest: number;
+  /** The secret level, earned for good by owning every skin and completing every level. */
+  secretEarned: boolean;
+  /** The player has opened the earned secret level at least once (clears the "new" mark). */
+  secretSeen: boolean;
   practice: boolean;
   latency: number;
   /** Lifetime coins. */
@@ -67,7 +71,7 @@ export interface StorageLike {
 
 const emptyRecords = (): SaveData['records'] => ({ easy: { best: 0, bestDist: 0 }, normal: { best: 0, bestDist: 0 }, hard: { best: 0, bestDist: 0 } });
 
-const defaults = (): SaveData => ({ v: 1, records: emptyRecords(), mode: DEFAULT_MODE, difficulty: DEFAULT_DIFFICULTY, attempts: 0, rhythm: {}, rhythmLevel: 0, gravityLevel: 0, secretBest: 0, practice: false, latency: 0, coins: 0, music: true, sfx: true, musicSfx: 'soft', maxDist: 0, saws: 0, crushers: 0, skin: 'classic', unlocked: ['classic'] });
+const defaults = (): SaveData => ({ v: 1, records: emptyRecords(), mode: DEFAULT_MODE, difficulty: DEFAULT_DIFFICULTY, attempts: 0, rhythm: {}, rhythmLevel: 0, gravityLevel: 0, secretBest: 0, secretEarned: false, secretSeen: false, practice: false, latency: 0, coins: 0, music: true, sfx: true, musicSfx: 'soft', maxDist: 0, saws: 0, crushers: 0, skin: 'classic', unlocked: ['classic'] });
 
 /** Non-negative finite integer, else the fallback. Guards against hand-edited or corrupt storage. */
 function count(value: unknown, fallback: number): number {
@@ -106,6 +110,8 @@ function migrate(raw: unknown): SaveData {
     out.rhythmLevel = Math.min(63, count(o.rhythmLevel, 0));
     out.gravityLevel = Math.min(63, count(o.gravityLevel, 0));
     out.secretBest = count(o.secretBest, 0);
+    out.secretEarned = o.secretEarned === true;
+    out.secretSeen = o.secretSeen === true;
     out.practice = o.practice === true;
     if (typeof o.latency === 'number' && Number.isFinite(o.latency)) out.latency = Math.max(-250, Math.min(250, Math.round(o.latency)));
     if (isDifficultyId(o.difficulty)) out.difficulty = o.difficulty;
@@ -175,6 +181,8 @@ export class Save {
         d.crushers = Math.max(d.crushers, other.crushers);
         d.unlocked = [...new Set([...d.unlocked, ...other.unlocked])];
         d.secretBest = Math.max(d.secretBest, other.secretBest);
+        d.secretEarned ||= other.secretEarned;
+        d.secretSeen ||= other.secretSeen;
         for (const [id, o] of Object.entries(other.rhythm)) {
           const m = d.rhythm[id];
           d.rhythm[id] = m

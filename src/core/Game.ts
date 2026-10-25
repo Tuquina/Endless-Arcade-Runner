@@ -83,6 +83,8 @@ export class Game {
   /** Skins unlocked during the current/last run (shown on the game-over screen). */
   readonly unlockedNow: Skin[] = [];
   onUnlock: ((skin: Skin) => void) | null = null;
+  /** Fired once, when finishing the whole game earns the secret level. */
+  onSecretEarned: (() => void) | null = null;
   onState: (() => void) | null = null;
   onFrame: (() => void) | null = null;
 
@@ -141,9 +143,10 @@ export class Game {
     window.addEventListener('blur', () => this.pause());
     this.audio.latencyMs = this.save.data.latency;
     this.cheats = Game.readCheatFlag();
-    // The secret mode only exists while the easter egg is on.
-    if (this.save.data.mode === 'secret' && !this.cheats) this.save.data.mode = 'endless';
     this.reconcileSkins();
+    this.checkSecretEarned(true); // saves that finished everything before this existed
+    // The secret level only exists once earned, or while the easter egg is on.
+    if (this.save.data.mode === 'secret' && !this.secretOpen) this.save.data.mode = 'endless';
     this.resetRun();
     this.audio.setMusicMode('on'); // takes effect after the first user gesture
   }
@@ -156,8 +159,9 @@ export class Game {
   /** Menu action: switch between the endless runner and the rhythm campaign. */
   setMode(mode: GameMode): void {
     if (this.state !== 'menu' || mode === this.save.data.mode) return;
-    if (mode === 'secret' && !this.cheats) return;
+    if (mode === 'secret' && !this.secretOpen) return;
     this.save.data.mode = mode;
+    if (mode === 'secret' && this.save.data.secretEarned) this.save.data.secretSeen = true;
     this.save.flush();
     this.resetRun();
     this.refreshGoalTarget();
@@ -250,7 +254,7 @@ export class Game {
       /* private mode: the flag just lives in memory */
     }
     if (!on) {
-      if (this.save.data.mode === 'secret') {
+      if (this.save.data.mode === 'secret' && !this.secretOpen) {
         this.save.data.mode = 'endless';
         this.save.flush();
       }
@@ -263,6 +267,35 @@ export class Game {
     }
     this.refreshGoalTarget();
     this.onState?.();
+  }
+
+  // ---------------------------------------------------------------- secret level
+
+  /** The secret level is playable once earned for real, or borrowed through the easter egg. */
+  get secretOpen(): boolean {
+    return this.cheats || this.save.data.secretEarned;
+  }
+
+  /** Earned but never opened yet: the menu marks its tab as new. */
+  get secretIsNew(): boolean {
+    return this.save.data.secretEarned && !this.save.data.secretSeen;
+  }
+
+  /** The whole game, earned for real: every skin owned and every level of both campaigns completed. */
+  get gameComplete(): boolean {
+    return SKINS.every((s) => this.owns(s.id)) && [...LEVELS, ...GRAVITY_LEVELS].every((d) => this.recordOf(d).done);
+  }
+
+  /** Grant the secret level the moment the game is complete (silently when just loading a save). */
+  private checkSecretEarned(silent = false): void {
+    const d = this.save.data;
+    if (d.secretEarned || !this.gameComplete) return;
+    d.secretEarned = true;
+    this.save.flush();
+    if (!silent) {
+      this.audio.sfx('record');
+      this.onSecretEarned?.();
+    }
   }
 
   /** Completed levels and collected discos across both music campaigns (skin objectives). */
@@ -505,6 +538,7 @@ export class Game {
     this.refreshDistanceGoal();
     this.refreshGoalTarget();
     this.save.flush(); // don't lose the reward if the tab is closed mid-run
+    this.checkSecretEarned(); // ...or the last skin
   }
 
   get best(): number {
@@ -777,6 +811,7 @@ export class Game {
       rec.discos |= r.discoMask;
       this.save.flush();
       this.checkUnlocks(); // "complete N levels" / "collect N discos"
+      this.checkSecretEarned(); // the last level can complete the game without unlocking a skin
     }
     this.celebrate = true;
     this.audio.sfx('record');

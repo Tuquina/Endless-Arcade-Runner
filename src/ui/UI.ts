@@ -84,6 +84,11 @@ export class UI {
     game.onState = () => this.sync();
     game.onFrame = () => this.updateHud();
     game.onUnlock = (skin) => this.showToast(skin);
+    // Finishing the whole game: after the last skin's toast, if one is on screen.
+    game.onSecretEarned = () => {
+      const busy = this.toast.classList.contains('show');
+      window.setTimeout(() => this.showMessage('¡Juego completado! Nivel secreto Ω desbloqueado.', 5000), busy ? 3400 : 0);
+    };
     this.buildSkins();
     this.buildModes();
     this.buildLevels();
@@ -349,7 +354,10 @@ export class UI {
     const g = this.game;
     for (const b of el('mode-row').querySelectorAll<HTMLElement>('.mode-chip')) {
       b.setAttribute('aria-pressed', String(b.dataset.mode === g.mode));
-      if (b.dataset.mode === 'secret') b.hidden = !g.cheats;
+      if (b.dataset.mode === 'secret') {
+        b.hidden = !g.secretOpen;
+        b.dataset.new = String(g.secretIsNew);
+      }
     }
     const rhythm = g.musical;
     this.screens.menu.dataset.mode = g.mode;
