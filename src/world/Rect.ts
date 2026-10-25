@@ -5,7 +5,19 @@ export const COIN = 2;
 export const PAD = 3;
 /** Rhythm mode only: a ring in the air; pressing while touching it jumps again in mid-air. */
 export const RING = 4;
-export type RectKind = typeof SOLID | typeof HAZARD | typeof COIN | typeof PAD | typeof RING;
+/** Gravity mode only: a portal the runner passes through; `code` says what it does. */
+export const TRIGGER = 5;
+export type RectKind = typeof SOLID | typeof HAZARD | typeof COIN | typeof PAD | typeof RING | typeof TRIGGER;
+
+/** Ring codes: a yellow ring jumps, a blue one flips gravity. */
+export const RING_JUMP = 0;
+export const RING_FLIP = 1;
+/** Portal codes. */
+export const PORTAL_GRAVITY_UP = 1;
+export const PORTAL_GRAVITY_DOWN = 2;
+export const PORTAL_CUBE = 3;
+export const PORTAL_BALL = 4;
+export const PORTAL_SHIP = 5;
 
 /** Motion profiles of a mover, as a function of u ∈ [0, 1) (position inside one wavelength). */
 export const WAVE_SINE = 0;
@@ -21,6 +33,8 @@ export class Rect {
   kind: RectKind = SOLID;
   /** Coins only: already collected this run (skipped by queries and drawing). */
   taken = false;
+  /** Rings and portals: what they do (see RING_* and PORTAL_*). */
+  code = 0;
   /** Last grid column this rect is registered in (used for recycling). */
   lastCol = 0;
 

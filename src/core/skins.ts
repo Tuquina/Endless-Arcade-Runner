@@ -199,8 +199,8 @@ export function goalText(goal: Goal): string {
     case 'attempts': return `Jugá ${goal.n} partidas`;
     case 'saws': return `Esquivá ${goal.n} sierras`;
     case 'crushers': return `Pasá ${goal.n} prensas`;
-    case 'levels': return `Completá ${goal.n} niveles de Ritmo`;
-    case 'discos': return `Juntá ${goal.n} discos en Ritmo`;
+    case 'levels': return `Completá ${goal.n} niveles de Ritmo o Gravedad`;
+    case 'discos': return `Juntá ${goal.n} discos en Ritmo o Gravedad`;
   }
 }
 

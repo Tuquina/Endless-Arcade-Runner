@@ -40,6 +40,13 @@ export const SPIKE_HIT_HEIGHT = 0.5;
 /** Rhythm mode: upward speed given by a launch pad (≈ 3 tiles high), and by a mid-air ring. */
 export const PAD_VELOCITY = 19.5;
 export const RING_VELOCITY = 14;
+/** Gravity mode: speed towards the new floor after a ball flip or a blue ring, and the ship's flight. */
+export const BALL_KICK = 5;
+export const FLIP_KICK = 4;
+export const SHIP_ACCEL = 42;
+export const SHIP_MAX_SPEED = 7;
+/** Flying off the top (gravity flipped over a gap in the ceiling) is a fall too. */
+export const DEATH_TOP = 16;
 
 /** Horizontal speed (tiles/s) at difficulty 0 and 1. */
 export const SPEED_MIN = 7;

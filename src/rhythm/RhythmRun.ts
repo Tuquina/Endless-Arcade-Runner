@@ -2,8 +2,7 @@ import { STEP } from '../core/Loop';
 import type { Player } from '../physics/Player';
 import { COIN, type Rect } from '../world/Rect';
 import type { World } from '../world/World';
-import { compileLevel, type Checkpoint, type CompiledLevel } from './level';
-import { LEVELS } from './levels';
+import { compileLevel, type Checkpoint, type CompiledLevel, type LevelDef } from './level';
 
 export type Judgement = 'perfect' | 'good' | 'ok' | 'miss';
 
@@ -25,7 +24,7 @@ const BEHIND = 16;
  * checkpoints. The Game owns the player, world, audio and state machine and calls into this.
  */
 export class RhythmRun {
-  private readonly cache = new Map<number, CompiledLevel>();
+  private readonly cache = new Map<string, CompiledLevel>();
   level: CompiledLevel | null = null;
   index = 0;
   practice = false;
@@ -47,13 +46,14 @@ export class RhythmRun {
   private feedIdx = 0;
   private pressIdx = 0;
 
-  /** Compile (once, then cached) and select a level. */
-  load(index: number): CompiledLevel {
-    this.index = Math.max(0, Math.min(LEVELS.length - 1, index));
-    let lv = this.cache.get(this.index);
+  /** Compile (once, then cached) and select level `index` of a campaign. */
+  load(levels: readonly LevelDef[], index: number): CompiledLevel {
+    this.index = Math.max(0, Math.min(levels.length - 1, index));
+    const def = levels[this.index]!;
+    let lv = this.cache.get(def.id);
     if (!lv) {
-      lv = compileLevel(LEVELS[this.index]!);
-      this.cache.set(this.index, lv);
+      lv = compileLevel(def);
+      this.cache.set(def.id, lv);
     }
     this.level = lv;
     this.discoX = lv.rects.filter((r) => r.kind === COIN).map((r) => r.x0);
@@ -98,7 +98,7 @@ export class RhythmRun {
     while (this.feedIdx < rects.length && rects[this.feedIdx]!.x0 < untilX) {
       const r = rects[this.feedIdx++]!;
       if (r.x1 <= origin) continue;
-      world.add(Math.max(r.x0, origin), r.y0, r.x1, r.y1, r.kind);
+      world.add(Math.max(r.x0, origin), r.y0, r.x1, r.y1, r.kind).code = r.code ?? 0;
     }
   }
 

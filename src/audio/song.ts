@@ -41,7 +41,7 @@ export interface Section {
   arpRate?: 8 | 16;
   /** Sustained chord pad. */
   pad?: boolean;
-  /** Lead melody: one token per 16th, a scale degree with `+`/`-` octave marks, `-` tie, `.` rest. */
+  /** Lead melody: one token per 16th, a scale degree with optional `#`/`b` and `+`/`-` octave marks, `-` tie, `.` rest. */
   lead?: string;
   /** Obstacle chart (see rhythm/level.ts), cycled like the patterns. */
   chart?: string;
@@ -153,10 +153,10 @@ function leadLine(song: Song, sec: Section, steps: number): Note[] {
     }
     last = -1;
     if (t === '.') continue;
-    const m = /^(-?\d+)([+-]*)$/.exec(t);
+    const m = /^(-?\d+)([#b]?)([+-]*)$/.exec(t);
     if (!m) throw new Error(`${song.id}/${sec.name}: bad lead token "${t}"`);
-    let midi = degreeToMidi(song.root, song.scale, Number(m[1]));
-    for (const c of m[2]!) midi += c === '+' ? 12 : -12;
+    let midi = degreeToMidi(song.root, song.scale, Number(m[1])) + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
+    for (const c of m[3]!) midi += c === '+' ? 12 : -12;
     out[i] = { midi, len: 1 };
     last = i;
   }
@@ -267,7 +267,8 @@ export function scheduleSongStep(e: SongEnv, c: CompiledSong, step: number, t: n
   const b = c.bass[si]![local]!;
   if (b.len) {
     voice(ctx, out, {
-      type: song.bass, freq: midiToFreq(b.midi), start: t, dur: dur * b.len * 0.95, gain: 0.2,
+      // A sine bass (808) carries much more low end than a filtered saw: keep it level with the others.
+      type: song.bass, freq: midiToFreq(b.midi), start: t, dur: dur * b.len * 0.95, gain: song.bass === 'sine' ? 0.13 : 0.2,
       shape: b.len > 1 ? 'hold' : 'pluck', cutoff: 900, cutoffEnd: 260, q: 3,
     });
   }

@@ -829,8 +829,8 @@
 }
 
 /* ---------- rhythm mode ---------- */
-.hud[data-mode='rhythm'] .hud-endless,
-.hud:not([data-mode='rhythm']) .hud-rhythm {
+.hud:not([data-mode='endless']) .hud-endless,
+.hud[data-mode='endless'] .hud-rhythm {
   display: none;
 }
 .hud-rhythm.hud-left {
@@ -928,8 +928,8 @@
 .menu-rhythm:empty {
   display: none;
 }
-#screen-menu[data-mode='rhythm'] .seg,
-#screen-menu[data-mode='rhythm'] .diff-hint {
+#screen-menu:not([data-mode='endless']) .seg,
+#screen-menu:not([data-mode='endless']) .diff-hint {
   display: none;
 }
 
@@ -1174,6 +1174,9 @@
   font-size: 1.6rem;
   text-align: center;
 }
-#screen-menu[data-mode='rhythm'] .menu-best {
+#screen-menu:not([data-mode='endless']) .menu-best {
   display: none;
+}
+#levels-title {
+  font-size: clamp(1.5rem, 7.5vw, 2rem);
 }

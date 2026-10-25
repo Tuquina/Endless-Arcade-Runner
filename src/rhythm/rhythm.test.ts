@@ -151,7 +151,7 @@ describe('rhythm levels', () => {
 describe('RhythmRun judging', () => {
   it('grades presses by distance to the note and counts skipped notes as misses', () => {
     const r = new RhythmRun();
-    const lv = r.load(0);
+    const lv = r.load(LEVELS, 0);
     const w = new World(256);
     const p = new Player();
     r.begin(w, p, null);
@@ -177,7 +177,7 @@ describe('RhythmRun judging', () => {
   it('feeds the level into a small World without overflowing it, from the start or a checkpoint', () => {
     const r = new RhythmRun();
     for (let i = 0; i < LEVELS.length; i++) {
-      const lv = r.load(i);
+      const lv = r.load(LEVELS, i);
       const w = new World(256);
       const p = new Player();
       for (const cp of [null, ...lv.checkpoints]) {

@@ -1,6 +1,7 @@
 import type { Game } from '../core/Game';
 import { DIFFICULTY_INFO, GAME_MODES, type GameMode } from '../core/modes';
-import { LEVELS, TIER_NAMES } from '../rhythm/levels';
+import { TIER_NAMES } from '../rhythm/levels';
+import { GRAVITY_CREDITS } from '../rhythm/gravityLevels';
 import { gradeOf, popcount } from '../rhythm/RhythmRun';
 import { DIFFICULTY_IDS, type DifficultyId } from '../world/Difficulty';
 import { GOAL_UNIT, SKINS, goalText, type Skin } from '../core/skins';
@@ -96,7 +97,7 @@ export class UI {
       this.deadTimer = window.setTimeout(() => {
         if (g.state !== state) return;
         if (state === 'complete') this.fillComplete();
-        else if (g.mode === 'rhythm') this.fillRDead();
+        else if (g.musical) this.fillRDead();
         else this.fillDead();
         this.deadVisible = true;
         this.applyScreen();
@@ -111,7 +112,7 @@ export class UI {
     if (g.state !== 'menu') this.levelsOpen = false;
     this.hud.dataset.mode = g.mode;
     el('hud-practice').hidden = !g.rhythm.practice;
-    el('hud-track-name').textContent = g.mode === 'rhythm' ? LEVELS[g.rhythm.index]!.name : '';
+    el('hud-track-name').textContent = g.musical ? g.levels[g.rhythm.index]!.name : '';
     this.hud.dataset.show = String(g.state !== 'menu' && g.state !== 'dead');
     this.applyScreen();
   }
@@ -123,7 +124,7 @@ export class UI {
       case 'paused':
         return 'pause';
       case 'dead':
-        return this.deadVisible ? (this.game.mode === 'rhythm' ? 'rdead' : 'dead') : null;
+        return this.deadVisible ? (this.game.musical ? 'rdead' : 'dead') : null;
       case 'complete':
         return this.deadVisible ? 'complete' : null;
       default:
@@ -195,7 +196,7 @@ export class UI {
   private fillRDead(): void {
     const g = this.game;
     const rec = g.levelRecord(g.rhythm.index);
-    el('rdead-name').textContent = LEVELS[g.rhythm.index]!.name;
+    el('rdead-name').textContent = g.levels[g.rhythm.index]!.name;
     el('rdead-pct').textContent = `${g.rhythmProgress}%`;
     el('rdead-fill').style.width = `${g.rhythmProgress}%`;
     el('rdead-best').textContent = `${rec.best}%`;
@@ -229,30 +230,43 @@ export class UI {
     }
     discos.append(document.createTextNode(practice ? ' Los discos y récords solo cuentan fuera de práctica.' : ` ${popcount(rec.discos)}/3 discos`));
     const next = r.index + 1;
-    const hasNext = next < LEVELS.length && g.isLevelUnlocked(next);
+    const levels = g.levels;
+    const hasNext = next < levels.length && g.isLevelUnlocked(next);
     const btn = el('btn-next-level');
     btn.hidden = practice || !hasNext;
     el('complete-next-note').textContent = practice
       ? 'Ahora intentalo sin puntos de control para completarlo de verdad.'
-      : next >= LEVELS.length
+      : next >= levels.length
         ? '¡Completaste toda la gira!'
-        : `Desbloqueado: ${LEVELS[next]!.name}`;
+        : `Desbloqueado: ${levels[next]!.name}`;
     const badge = el('complete-unlock');
     badge.hidden = g.unlockedNow.length === 0;
     badge.textContent = `¡Aspecto desbloqueado: ${g.unlockedNow.map((s) => s.name).join(', ')}!`;
   }
 
-  /** Rhythm level cards are created once; `refreshLevels` updates them. */
+  /** Level cards of the current campaign; rebuilt when the campaign changes, otherwise only refreshed. */
+  private builtFor = '';
+
   private buildLevels(): void {
+    const g = this.game;
+    if (this.builtFor === g.mode) return;
+    this.builtFor = g.mode;
+    const gravity = g.mode === 'gravity';
+    el('levels-title').textContent = gravity ? 'Modo Gravedad' : 'Modo Ritmo';
+    el('levels-sub').textContent = gravity
+      ? 'Clásicos de dominio público, remezclados: portales de gravedad, una bola que salta al techo y una nave.'
+      : 'Saltá al compás: cada obstáculo cae justo en una nota. Completá un nivel para abrir el siguiente.';
     const list = el('level-list');
-    LEVELS.forEach((lv, i) => {
+    list.replaceChildren();
+    g.levels.forEach((lv, i) => {
+      const credit = GRAVITY_CREDITS[lv.id];
       const card = document.createElement('button');
       card.className = 'level-card';
       card.dataset.action = 'play-level';
       card.dataset.level = String(i);
       card.innerHTML =
         `<span class="level-num">${i + 1}</span>` +
-        `<span class="level-main"><b class="level-name">${lv.name}</b><small class="level-meta">${lv.song.bpm} BPM · ${TIER_NAMES[lv.tier]} · ${lv.blurb}</small>` +
+        `<span class="level-main"><b class="level-name">${lv.name}</b><small class="level-meta">${credit ? `${credit} · ` : ''}${lv.song.bpm} BPM · ${TIER_NAMES[lv.tier]} · ${lv.blurb}</small>` +
         `<i class="level-bar"><b></b></i></span>` +
         `<span class="level-side"><b class="level-pct"></b><span class="level-discos"></span></span>`;
       card.dataset.tier = String(lv.tier);
@@ -262,6 +276,7 @@ export class UI {
 
   private refreshLevels(): void {
     const g = this.game;
+    this.buildLevels();
     this.root.querySelector('[data-action="toggle-practice"]')?.setAttribute('aria-checked', String(g.save.data.practice));
     for (const card of el('level-list').children as HTMLCollectionOf<HTMLElement>) {
       const i = Number(card.dataset.level);
@@ -281,7 +296,7 @@ export class UI {
       }
       card.setAttribute(
         'aria-label',
-        open ? `Nivel ${i + 1}, ${LEVELS[i]!.name}: ${rec.done ? 'completado' : `${rec.best}%`}` : `Nivel ${i + 1} bloqueado: completá el anterior`,
+        open ? `Nivel ${i + 1}, ${g.levels[i]!.name}: ${rec.done ? 'completado' : `${rec.best}%`}` : `Nivel ${i + 1} bloqueado: completá el anterior`,
       );
     }
   }
@@ -317,10 +332,10 @@ export class UI {
     for (const b of el('mode-row').querySelectorAll<HTMLElement>('.mode-chip')) {
       b.setAttribute('aria-pressed', String(b.dataset.mode === g.mode));
     }
-    const rhythm = g.mode === 'rhythm';
+    const rhythm = g.musical;
     this.screens.menu.dataset.mode = g.mode;
     el('play-label').textContent = rhythm ? 'Elegir nivel' : 'Jugar';
-    el('menu-rhythm').textContent = rhythm ? `Niveles ${g.levelsDone}/${LEVELS.length} · Discos ${g.discosTotal}/${LEVELS.length * 3}` : '';
+    el('menu-rhythm').textContent = rhythm ? `Niveles ${g.campaignDone}/${g.levels.length} · Discos ${g.campaignDiscos}/${g.levels.length * 3}` : '';
     for (const b of el('diff-row').querySelectorAll<HTMLElement>('.seg-btn')) {
       b.setAttribute('aria-checked', String(b.dataset.difficulty === g.difficultyId));
     }
@@ -424,7 +439,7 @@ export class UI {
       this.hudCoins.textContent = String(g.coins);
       el('hud-discos').textContent = String(g.coins);
     }
-    if (g.mode === 'rhythm') {
+    if (g.musical) {
       if (g.rhythmProgress !== this.lastPct) {
         this.lastPct = g.rhythmProgress;
         el('hud-pct').textContent = `${g.rhythmProgress}%`;
@@ -509,7 +524,7 @@ export class UI {
     g.audio.sfx('click');
     switch (target.dataset.action) {
       case 'play':
-        if (g.mode === 'rhythm') {
+        if (g.musical) {
           this.levelsOpen = true;
           this.refreshLevels();
           this.applyScreen();

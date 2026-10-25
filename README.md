@@ -85,7 +85,7 @@ dibujo), así que ya no exigen el píxel exacto.
 
 ### Modos y dificultades
 
-El menú elige el **modo de juego** (*Sin fin* o *Ritmo*, ver abajo) y la **dificultad** del modo sin fin, con récord
+El menú elige el **modo de juego** (*Sin fin*, *Ritmo* o *Gravedad*, ver abajo) y la **dificultad** del modo sin fin, con récord
 propio en cada una
 (`src/core/modes.ts`, `DIFFICULTIES` en `src/world/Difficulty.ts`):
 
@@ -164,6 +164,37 @@ sobre el camino ideal (se pierden si saltás fuera de tiempo; cuentan al complet
 agrega puntos de control al inicio de cada sección, reaparecés con la música desde ahí, y no guarda récords.
 Los niveles completados y los discos desbloquean aspectos (DJ, Bola disco, Maestro).
 
+## Modo Gravedad
+
+Tercer modo, aparte de los otros dos: **3 niveles** con melodías famosas de **dominio público** (los compositores
+murieron hace más de un siglo), en arreglos nuevos hechos para el juego y sintetizados en vivo, así que tampoco hay
+grabaciones de terceros (`src/rhythm/gravityLevels.ts`):
+
+| # | Nivel | Obra original | Arreglo | Idea nueva |
+|---|---|---|---|---|
+| 1 | Himno de la Alegría | Beethoven, 9.ª sinfonía (1824) | house, 128 BPM | portales de gravedad y anillos azules |
+| 2 | Can-Can | Offenbach, *Galop infernal* (1858) | electro galop, 150 BPM | **bola**: cada toque la cambia de piso a techo |
+| 3 | Rey de la Montaña | Grieg, *Peer Gynt* (1875) | trap, 140 BPM | **nave**: mantené para subir, soltá para bajar |
+
+Se descartaron temas con dueño: la base de un rap de YouTuber tiene autor y no está liberada, y la melodía de
+Tetris (Korobeiniki) es popular pero la versión de videojuego está protegida por una marca sonora.
+
+**Gravedad en la física** (`src/physics/Player.ts`): el jugador tiene un sentido de "arriba" (`g = ±1`) y una forma
+(`cube`, `ball`, `ship`). Todas las reglas verticales están escritas respecto de `g`, así que con la gravedad
+invertida el salto es el espejo exacto del normal (hay un test que lo comprueba paso a paso). Los portales
+cambian la gravedad o la forma; el anillo azul invierte la gravedad en el aire; la bola invierte la gravedad
+al tocar estando sobre una superficie; la nave acelera hacia arriba mientras se mantiene el botón y puede
+deslizarse por piso y techo (los costados de los bloques sí matan).
+
+**Cómo se arman** (`src/rhythm/level.ts`): los niveles de gravedad tienen techo y el chart suma `G` (portal de
+gravedad), `O` (anillo azul), `C`/`L`/`V` (portales de cubo, bola y nave), `f` (cambio de lado de la bola) y
+`^`/`v` (empezar y dejar de mantener en la nave). Con la gravedad invertida, los obstáculos se espejan y cuelgan
+del techo. Para la bola se buscan por simulación los momentos de toque que esquivan pinchos en el lado actual
+(tarde) y en el opuesto (temprano), y se centra esa ventana en la nota. Para la nave, el nivel **talla un túnel**
+alrededor del vuelo ideal, con un margen arriba y abajo. Los tests recorren los tres niveles en la nota, con
+errores aleatorios de ±40 ms (también al soltar en la nave), adelantados o atrasados 40 ms y con toques cortos o
+largos.
+
 ## Aspectos y objetivos
 
 21 aspectos (solo cosméticos: no cambian la hitbox ni los controles), cada uno con su propio diseño: patrón en el
@@ -177,7 +208,7 @@ copos, píxeles…). Se desbloquean con objetivos de varios tipos, así que no t
 | Partidas jugadas | 40 Robot · 150 Fantasma |
 | Sierras esquivadas | 40 Hielo |
 | Prensas pasadas | 25 Glitch |
-| Modo Ritmo | 2 niveles DJ · 12 discos Bola disco · 8 niveles Maestro |
+| Ritmo y Gravedad | 2 niveles DJ · 12 discos Bola disco · 8 niveles Maestro |
 
 Los objetivos se cumplen en el momento (aviso en pantalla y guardado inmediato), el menú muestra el aspecto más
 cercano a completarse, y las metas de distancia aparecen como puertas doradas en el mundo.

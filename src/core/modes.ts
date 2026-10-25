@@ -7,7 +7,7 @@
  * a property of the endless mode only; the rhythm mode is a campaign of fixed levels (rhythm/levels.ts)
  * that brings its own notion of challenge.
  */
-export type GameMode = 'endless' | 'rhythm';
+export type GameMode = 'endless' | 'rhythm' | 'gravity';
 
 export interface ModeInfo {
   id: GameMode;
@@ -17,14 +17,15 @@ export interface ModeInfo {
 }
 
 export const GAME_MODES: readonly ModeInfo[] = [
-  { id: 'endless', name: 'Sin fin', blurb: 'Corré lo más lejos posible', available: true },
-  { id: 'rhythm', name: 'Ritmo', blurb: 'Niveles al compás de la música', available: true },
+  { id: 'endless', name: 'Sin fin', blurb: 'Corré lo más lejos', available: true },
+  { id: 'rhythm', name: 'Ritmo', blurb: 'Niveles musicales', available: true },
+  { id: 'gravity', name: 'Gravedad', blurb: 'Clásicos al revés', available: true },
 ];
 
 export const DEFAULT_MODE: GameMode = 'endless';
 
 export function isGameMode(v: unknown): v is GameMode {
-  return v === 'endless' || v === 'rhythm';
+  return v === 'endless' || v === 'rhythm' || v === 'gravity';
 }
 
 /** Menu copy for each endless difficulty. */
