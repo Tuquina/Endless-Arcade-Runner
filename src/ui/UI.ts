@@ -44,6 +44,7 @@ export class UI {
   private levelsOpen = false;
   private readonly secretTaps = new TapCounter();
   private lastPct = -1;
+  private lastTrack = '';
   private lastCombo = -1;
   private readonly toast = el('toast');
   private toastTimer = 0;
@@ -118,7 +119,8 @@ export class UI {
     if (g.state !== 'menu') this.levelsOpen = false;
     this.hud.dataset.mode = g.mode;
     el('hud-practice').hidden = !g.rhythm.practice;
-    el('hud-track-name').textContent = g.musical ? g.levels[g.rhythm.index]!.name : '';
+    el('hud-track-name').textContent = g.musical ? g.trackName : '';
+    this.lastTrack = '';
     this.hud.dataset.show = String(g.state !== 'menu' && g.state !== 'dead');
     this.applyScreen();
   }
@@ -201,6 +203,16 @@ export class UI {
 
   private fillRDead(): void {
     const g = this.game;
+    if (g.mode === 'secret') {
+      el('rdead-name').textContent = g.trackName;
+      el('rdead-pct').textContent = `${g.distance} m`;
+      el('rdead-fill').style.width = `${Math.min(100, (g.distance / Math.max(1, g.secretBest)) * 100)}%`;
+      el('rdead-best').textContent = `${g.secretBest} m`;
+      el('rdead-attempt').textContent = `${(g.zone?.index ?? 0) + 1} (zona)`;
+      el('rdead-best-badge').hidden = !g.rhythmNewBest;
+      el('rdead-tip').textContent = 'Cada intento genera un recorrido nuevo: zonas de saltos, gravedad, bola, nave y onda.';
+      return;
+    }
     const rec = g.levelRecord(g.rhythm.index);
     el('rdead-name').textContent = g.levels[g.rhythm.index]!.name;
     el('rdead-pct').textContent = `${g.rhythmProgress}%`;
@@ -337,11 +349,13 @@ export class UI {
     const g = this.game;
     for (const b of el('mode-row').querySelectorAll<HTMLElement>('.mode-chip')) {
       b.setAttribute('aria-pressed', String(b.dataset.mode === g.mode));
+      if (b.dataset.mode === 'secret') b.hidden = !g.cheats;
     }
     const rhythm = g.musical;
     this.screens.menu.dataset.mode = g.mode;
     el('play-label').textContent = rhythm ? 'Elegir nivel' : 'Jugar';
-    el('menu-rhythm').textContent = rhythm ? `Niveles ${g.campaignDone}/${g.levels.length} · Discos ${g.campaignDiscos}/${g.levels.length * 3}` : '';
+    if (g.mode === 'secret') el('play-label').textContent = 'Jugar Ω';
+    el('menu-rhythm').textContent = g.mode === 'secret' ? `Récord secreto: ${g.secretBest} m` : rhythm ? `Niveles ${g.campaignDone}/${g.levels.length} · Discos ${g.campaignDiscos}/${g.levels.length * 3}` : '';
     for (const b of el('diff-row').querySelectorAll<HTMLElement>('.seg-btn')) {
       b.setAttribute('aria-checked', String(b.dataset.difficulty === g.difficultyId));
     }
@@ -449,12 +463,28 @@ export class UI {
       this.hudCoins.textContent = String(g.coins);
       el('hud-discos').textContent = String(g.coins);
     }
-    if (g.musical) {
+    if (g.mode === 'secret') {
+      // Metres instead of %, and the bar shows how far through the current zone the runner is.
+      if (g.distance !== this.lastPct) {
+        this.lastPct = g.distance;
+        el('hud-pct').textContent = `${g.distance} m`;
+        const z = g.zone;
+        const f = z ? (g.player.x - z.x0) / (z.x1 - z.x0) : 0;
+        el('hud-progress-fill').style.width = `${Math.max(0, Math.min(1, f)) * 100}%`;
+      }
+      const name = g.trackName;
+      if (name !== this.lastTrack) {
+        this.lastTrack = name;
+        el('hud-track-name').textContent = name;
+      }
+    } else if (g.musical) {
       if (g.rhythmProgress !== this.lastPct) {
         this.lastPct = g.rhythmProgress;
         el('hud-pct').textContent = `${g.rhythmProgress}%`;
         el('hud-progress-fill').style.width = `${g.rhythmProgress}%`;
       }
+    }
+    if (g.musical) {
       const combo = g.rhythm.combo;
       if (combo !== this.lastCombo) {
         this.lastCombo = combo;
@@ -556,7 +586,7 @@ export class UI {
     g.audio.sfx('click');
     switch (target.dataset.action) {
       case 'play':
-        if (g.musical) {
+        if (g.musical && g.mode !== 'secret') {
           this.levelsOpen = true;
           this.refreshLevels();
           this.applyScreen();

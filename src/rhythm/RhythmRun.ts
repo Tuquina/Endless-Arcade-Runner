@@ -61,6 +61,13 @@ export class RhythmRun {
     return lv;
   }
 
+  /** Play a level that was built elsewhere (the growing secret run). */
+  loadLevel(lv: CompiledLevel): void {
+    this.index = 0;
+    this.level = lv;
+    this.discoX = [];
+  }
+
   /** Put the runner at the start of the level, or at a practice checkpoint. */
   begin(world: World, player: Player, cp: Checkpoint | null): void {
     const lv = this.level!;
@@ -99,6 +106,11 @@ export class RhythmRun {
     while (this.feedIdx < rects.length && rects[this.feedIdx]!.x0 < untilX) {
       const r = rects[this.feedIdx++]!;
       if (r.x1 <= origin) continue;
+      if (r.mover) {
+        const m = r.mover;
+        world.addMover(r.x0, r.y0, r.x1, r.y1, m.amp, m.wavelength, m.phase, m.wave, m.railTop);
+        continue;
+      }
       const rect = world.add(Math.max(r.x0, origin), r.y0, r.x1, r.y1, r.kind);
       rect.code = r.code ?? 0;
       if (r.value !== undefined) rect.amp = r.value;

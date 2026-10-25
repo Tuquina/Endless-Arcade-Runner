@@ -216,6 +216,15 @@ los aspectos y todos los niveles quedan disponibles **solo durante la sesión** 
 en el guardado). El menú muestra un cartel "Modo secreto activo" que lo desactiva y vuelve al progreso real; el
 progreso hecho mientras tanto (récords, monedas, niveles completados) sí se guarda.
 
+Con el modo secreto activo aparece un cuarto modo, **Ω Secreto**: una carrera **infinita y procedural** que usa todo
+lo que tiene el juego (`src/rhythm/secret.ts`). Se arma con *zonas* de 10 compases generadas al azar (semilla
+por intento): saltos con pinchos, bloques, huecos, pisos que suben, impulsos, anillos, sierras y prensas; zonas
+con techo y gravedad invertida (portales y anillos azules); bola, nave y onda; y portales de velocidad. Cada zona
+trae su propia música (La menor, de 124 a 172 BPM según avanza), la velocidad sube zona a zona y el fondo pasa
+por los cinco mundos como en el modo sin fin. Cada zona se compila y se prueba con el mismo compilador de los
+niveles (empieza y termina como cubo sobre el piso, así cualquier zona puede seguir a cualquiera) y se pega al
+final del recorrido mientras jugás; la canción crece con ella. Guarda el mejor récord en metros.
+
 ## Aspectos y objetivos
 
 21 aspectos (solo cosméticos: no cambian la hitbox ni los controles), cada uno con su propio diseño: patrón en el

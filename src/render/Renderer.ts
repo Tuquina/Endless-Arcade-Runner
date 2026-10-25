@@ -6,6 +6,7 @@ import { hash } from './hash';
 import { GroundPainter } from './Ground';
 import { DISTANCE_GOALS } from '../core/skins';
 import { THEMES, ThemeBlender } from './themes';
+import { ZONE_NAMES } from '../rhythm/secret';
 
 /**
  * The visible world is always at least this tall and this wide (tiles) → same fairness everywhere.
@@ -130,7 +131,8 @@ export class Renderer {
     this.groundPx = this.h * GROUND_SCREEN_Y;
 
     // Rhythm levels keep one world's palette for the whole song.
-    this.theme.update(game.inRhythm ? game.rhythm.level!.def.theme * 400 + 1 : px + game.themeOffset);
+    // (The secret run cycles through every world as it goes, like the endless runner.)
+    this.theme.update(game.inRhythm && game.mode !== 'secret' ? game.rhythm.level!.def.theme * 400 + 1 : px + game.themeOffset);
     if (game.inRhythm) {
       const { beats, energy } = game.rhythm.beat();
       const phase = beats - Math.floor(beats);
@@ -627,6 +629,11 @@ export class Renderer {
     ctx.font = `900 ${Math.round(scale * 0.42)}px system-ui, sans-serif`;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
+    if (game.mode === 'secret') {
+      this.drawSecret(game, x0, x1);
+      this.drawPopup(game, runnerX);
+      return;
+    }
     const rec = game.levelRecord(r.index);
     if (!r.practice && rec.best > 0 && rec.best < 100) {
       const bx = this.X((rec.best / 100) * lv.endX);
@@ -664,8 +671,41 @@ export class Renderer {
       ctx.fillText('META', fx + cell * 2.4, this.groundPx * 0.3);
     }
 
+    this.drawPopup(game, runnerX);
+  }
+
+  /** Secret run: a banner at the start of every zone, and the record distance. */
+  private drawSecret(game: Game, x0: number, x1: number): void {
+    const { ctx, scale } = this;
+    const zones = game.stream?.zones ?? [];
+    for (const z of zones) {
+      if (game.state === 'menu') break;
+      if (z.x0 < x0 - 12 || z.x0 > x1) continue;
+      const zx = this.X(z.x0 + 1.5);
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.font = `900 ${Math.round(scale * 0.7)}px system-ui, sans-serif`;
+      ctx.fillText(z.index === 0 ? 'Ω MODO SECRETO' : `ZONA ${z.index + 1}`, zx, this.Y(4.3));
+      ctx.font = `800 ${Math.round(scale * 0.38)}px system-ui, sans-serif`;
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.fillText(`${ZONE_NAMES[z.kind]} · ${Math.round(game.stream!.level.song.song.sections[z.index * 4]?.bpm ?? 0)} BPM`, zx, this.Y(3.3));
+    }
+    const best = game.secretBest;
+    if (best > 0) {
+      const bx = this.X(best);
+      if (bx > -scale && bx < this.w + scale) {
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(bx - 1, 0, 2, this.groundPx);
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.font = `900 ${Math.round(scale * 0.42)}px system-ui, sans-serif`;
+        ctx.fillText(`MEJOR ${best} m`, bx + 6, this.groundPx * 0.22);
+      }
+    }
+  }
+
+  private drawPopup(game: Game, runnerX: number): void {
+    const { ctx, scale } = this;
     // Judgement popup above the runner.
-    const pop = r.popup;
+    const pop = game.rhythm.popup;
     if (pop && pop.j !== 'miss') {
       const age = game.time - pop.at;
       if (age < 0.55) {

@@ -7,7 +7,7 @@
  * a property of the endless mode only; the rhythm mode is a campaign of fixed levels (rhythm/levels.ts)
  * that brings its own notion of challenge.
  */
-export type GameMode = 'endless' | 'rhythm' | 'gravity';
+export type GameMode = 'endless' | 'rhythm' | 'gravity' | 'secret';
 
 export interface ModeInfo {
   id: GameMode;
@@ -20,12 +20,14 @@ export const GAME_MODES: readonly ModeInfo[] = [
   { id: 'endless', name: 'Sin fin', blurb: 'Corré lo más lejos', available: true },
   { id: 'rhythm', name: 'Ritmo', blurb: 'Niveles musicales', available: true },
   { id: 'gravity', name: 'Gravedad', blurb: 'Clásicos al revés', available: true },
+  /** Only shown while the easter egg is active (see Game.cheats). */
+  { id: 'secret', name: 'Ω Secreto', blurb: 'Infinito, con todo', available: true },
 ];
 
 export const DEFAULT_MODE: GameMode = 'endless';
 
 export function isGameMode(v: unknown): v is GameMode {
-  return v === 'endless' || v === 'rhythm' || v === 'gravity';
+  return v === 'endless' || v === 'rhythm' || v === 'gravity' || v === 'secret';
 }
 
 /** Menu copy for each endless difficulty. */

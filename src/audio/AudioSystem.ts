@@ -199,6 +199,11 @@ export class AudioSystem {
     return true;
   }
 
+  /** Swap in a longer version of the song being played (same beginning): the endless secret run grows as it goes. */
+  extendSong(song: CompiledSong): void {
+    if (this.song) this.song = song;
+  }
+
   stopSong(): void {
     if (this.songTimer) clearInterval(this.songTimer);
     this.songTimer = null;
