@@ -34,6 +34,16 @@ describe('Save', () => {
     expect(new Save(fake(JSON.stringify({ music: 'no' }))).data.music).toBe(true);
   });
 
+  it('keeps the disco sound of the music modes, soft by default', () => {
+    const st = fake();
+    const a = new Save(st);
+    expect(a.data.musicSfx).toBe('soft');
+    a.data.musicSfx = 'off';
+    a.flush();
+    expect(new Save(st).data.musicSfx).toBe('off');
+    expect(new Save(fake(JSON.stringify({ musicSfx: 'loud' }))).data.musicSfx).toBe('soft');
+  });
+
   it('stores skins and challenge progress, sanitising bad input', () => {
     const st = fake();
     const a = new Save(st);

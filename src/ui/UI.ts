@@ -551,6 +551,11 @@ export class UI {
       .querySelector('[data-action="toggle-music"]')
       ?.setAttribute('aria-checked', String(d.music));
     this.root.querySelector('[data-action="toggle-sfx"]')?.setAttribute('aria-checked', String(d.sfx));
+    for (const b of el('music-sfx-row').querySelectorAll<HTMLElement>('.seg-btn')) {
+      b.setAttribute('aria-checked', String(b.dataset.value === d.musicSfx));
+    }
+    // Only meaningful while effects are on.
+    el('music-sfx-row').closest<HTMLElement>('.opt')!.dataset.off = String(!d.sfx);
     el('latency-val').textContent = `${d.latency > 0 ? '+' : ''}${d.latency} ms`;
   }
 
@@ -676,6 +681,16 @@ export class UI {
         g.audio.refresh();
         this.refreshToggles();
         break;
+      case 'music-sfx': {
+        const v = target.dataset.value;
+        if (v !== 'soft' && v !== 'full' && v !== 'off') break;
+        g.save.data.musicSfx = v;
+        g.save.flush();
+        this.refreshToggles();
+        // Let the player hear the choice right after the button click.
+        setTimeout(() => g.audio.disco(), 120);
+        break;
+      }
       case 'toggle-sfx':
         g.save.data.sfx = !g.save.data.sfx;
         g.save.flush();

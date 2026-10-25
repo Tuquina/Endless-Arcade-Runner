@@ -1417,3 +1417,86 @@
 .hud[data-mode='secret'] .hud-right .hud-rhythm {
   display: none;
 }
+
+/* ---------- settings: option with a segmented choice ---------- */
+.opt {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.7rem 0.8rem 0.8rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.12);
+  transition: opacity 0.15s ease;
+}
+.opt > span {
+  display: flex;
+  flex-direction: column;
+  padding-left: 0.4rem;
+  font-size: 1.05rem;
+}
+.opt small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.opt .seg-btn {
+  font-size: 0.8rem;
+  min-height: 2.6rem;
+  padding: 0 0.2rem;
+}
+/* With effects off the choice has no effect: dimmed, still changeable. */
+.opt[data-off='true'] {
+  opacity: 0.5;
+}
+/* Short screens: tighter settings so Volver stays visible without scrolling. */
+@media (max-height: 700px) {
+  #screen-settings .panel {
+    gap: 0.5rem;
+  }
+  #screen-settings .title {
+    font-size: 1.8rem;
+  }
+  #screen-settings .toggle {
+    min-height: 2.9rem;
+  }
+  .opt {
+    gap: 0.35rem;
+    padding-block: 0.5rem 0.6rem;
+  }
+  .calib {
+    padding-block: 0.4rem;
+  }
+}
+/* Landscape phones: two columns (switches | disco sound), sync and Volver below. */
+@media (orientation: landscape) and (max-height: 500px) {
+  #screen-settings .panel {
+    width: min(100%, 44rem);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: 'title title' 'music opt' 'sfx opt' 'calib back';
+    align-items: stretch;
+  }
+  #screen-settings .title {
+    grid-area: title;
+    text-align: center;
+  }
+  #screen-settings [data-action='toggle-music'] {
+    grid-area: music;
+  }
+  #screen-settings [data-action='toggle-sfx'] {
+    grid-area: sfx;
+  }
+  #screen-settings .opt {
+    grid-area: opt;
+    justify-content: center;
+  }
+  #screen-settings .calib {
+    grid-area: calib;
+  }
+  #screen-settings [data-action='back'] {
+    grid-area: back;
+    align-self: center;
+  }
+}

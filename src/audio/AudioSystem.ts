@@ -3,9 +3,14 @@ import { LOOP_STEPS, scheduleStep, stepDuration } from './music';
 import { makeNoise } from './synth';
 import { scheduleSongStep, stepAtTime, type CompiledSong, type SongEnv } from './song';
 
+/** How discos sound in the music modes: a soft bell (default), the endless-runner coin, or nothing. */
+export type MusicSfx = 'soft' | 'full' | 'off';
+
 export interface AudioSettings {
   music: boolean;
   sfx: boolean;
+  /** Missing means 'soft'. */
+  musicSfx?: MusicSfx;
 }
 
 /** What the music should be doing: playing, quieter (paused), or faded out (game over). */
@@ -141,6 +146,13 @@ export class AudioSystem {
     this.coinStreak = now - this.lastCoinAt < 0.7 ? Math.min(this.coinStreak + 1, 12) : 0;
     this.lastCoinAt = now;
     this.sfx('coin', this.coinStreak);
+  }
+
+  /** Disco pickup in the music modes, as the player chose in Ajustes (soft unless told otherwise). */
+  disco(): void {
+    const how = this.settings().musicSfx ?? 'soft';
+    if (how === 'full') this.coin();
+    else if (how === 'soft') this.sfx('disco');
   }
 
   // ------------------------------------------------------------------ music

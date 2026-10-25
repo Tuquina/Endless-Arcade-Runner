@@ -1,4 +1,5 @@
 import { DEFAULT_DIFFICULTY, isDifficultyId, type DifficultyId } from '../world/Difficulty';
+import type { MusicSfx } from '../audio/AudioSystem';
 import { DEFAULT_MODE, isGameMode, type GameMode } from '../core/modes';
 
 /** Best run in one difficulty. */
@@ -44,6 +45,8 @@ export interface SaveData {
   /** Audio switches (applied by the audio system). */
   music: boolean;
   sfx: boolean;
+  /** Disco sound in the music modes (see AudioSystem.disco). */
+  musicSfx: MusicSfx;
   /** Longest distance (m) ever reached in one run; drives the skin challenges. */
   maxDist: number;
   /** Lifetime obstacles dodged (skin objectives). */
@@ -64,7 +67,7 @@ export interface StorageLike {
 
 const emptyRecords = (): SaveData['records'] => ({ easy: { best: 0, bestDist: 0 }, normal: { best: 0, bestDist: 0 }, hard: { best: 0, bestDist: 0 } });
 
-const defaults = (): SaveData => ({ v: 1, records: emptyRecords(), mode: DEFAULT_MODE, difficulty: DEFAULT_DIFFICULTY, attempts: 0, rhythm: {}, rhythmLevel: 0, gravityLevel: 0, secretBest: 0, practice: false, latency: 0, coins: 0, music: true, sfx: true, maxDist: 0, saws: 0, crushers: 0, skin: 'classic', unlocked: ['classic'] });
+const defaults = (): SaveData => ({ v: 1, records: emptyRecords(), mode: DEFAULT_MODE, difficulty: DEFAULT_DIFFICULTY, attempts: 0, rhythm: {}, rhythmLevel: 0, gravityLevel: 0, secretBest: 0, practice: false, latency: 0, coins: 0, music: true, sfx: true, musicSfx: 'soft', maxDist: 0, saws: 0, crushers: 0, skin: 'classic', unlocked: ['classic'] });
 
 /** Non-negative finite integer, else the fallback. Guards against hand-edited or corrupt storage. */
 function count(value: unknown, fallback: number): number {
@@ -110,6 +113,7 @@ function migrate(raw: unknown): SaveData {
     out.coins = count(o.coins, 0);
     out.music = typeof o.music === 'boolean' ? o.music : true;
     out.sfx = typeof o.sfx === 'boolean' ? o.sfx : true;
+    if (o.musicSfx === 'soft' || o.musicSfx === 'full' || o.musicSfx === 'off') out.musicSfx = o.musicSfx;
     out.maxDist = count(o.maxDist, 0);
     out.saws = count(o.saws, 0);
     out.crushers = count(o.crushers, 0);

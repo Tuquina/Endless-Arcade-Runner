@@ -824,7 +824,9 @@ export class Game {
       c.taken = true;
       if (this.musical) this.rhythm.takeDisco(c);
       this.coins++;
-      this.audio.coin();
+      // Over a song the endless-runner coin is too loud and off-key: the music modes use the disco sound.
+      if (this.musical) this.audio.disco();
+      else this.audio.coin();
       this.fx.coin((c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2);
       this.checkUnlocks(); // "collect N coins" objectives
     }
