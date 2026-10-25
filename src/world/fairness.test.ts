@@ -4,6 +4,7 @@ import { STEP } from '../core/Loop';
 import { Player } from '../physics/Player';
 import { reactionTime, speedAt } from './Difficulty';
 import { SegmentBuilder } from './SegmentBuilder';
+import { MIN_VARIANTS, bucketD, bucketOf, provenVariants, variantSeed } from './variants';
 import { PREFABS } from './segments';
 import { HOLDS, solveFrom, tryJump } from './Solver';
 import { World } from './World';
@@ -17,16 +18,30 @@ function pressWindow(prefabIdx: number, d: number, seed: number): number {
   world.appendFlat(gap + 4);
   const startX = world.cursor - gap;
   const b = new SegmentBuilder();
+  const segStart = world.cursor;
   b.begin(world);
-  prefab.build(b, new Rng(seed), d);
+  if (prefab.validate) {
+    // Random-timing prefabs only exist as proven variants; take the seed-th one at this difficulty.
+    const bucket = bucketOf(d);
+    const list = provenVariants(prefab.id, bucket);
+    prefab.build(b, new Rng(variantSeed(prefab.id, list[seed % list.length]![0])), bucketD(bucket));
+  } else {
+    prefab.build(b, new Rng(seed), d);
+  }
   b.commit();
-  const segStart = world.cursor - b.width;
   const end = world.cursor;
   world.appendFlat(gap + 4);
   const sp = () => speed;
   const p = new Player();
   p.reset(startX);
   p.speed = speed;
+
+  // A segment that can be crossed by simply running needs no timing at all.
+  const walker = new Player();
+  walker.copyFrom(p);
+  while (!walker.dead && walker.x < end + 1) walker.step(STEP, false, false, world);
+  if (!walker.dead) return Infinity;
+
   let best = 0, run = 0;
   for (let k = 0; k < 4000 && p.x < end; k++) {
     let ok = false;
@@ -57,8 +72,10 @@ describe('timing windows are human-sized', () => {
     it(prefab.id, () => {
       for (const d of [0, 0.5, 1]) {
         if (d < prefab.minD) continue;
+        // Random-timing prefabs are simply not used where no variant is proven fair (see variants.test.ts).
+        if (prefab.validate && provenVariants(prefab.id, bucketOf(d)).length < MIN_VARIANTS) continue;
         for (let seed = 1; seed <= 6; seed++) {
-          const w = pressWindow(i, d, seed);
+          const w = pressWindow(i, d, prefab.validate ? seed * 7 : seed); // spread over the variants
           expect(w, `${prefab.id} d=${d} seed=${seed}: only ${w.toFixed(0)} ms to press`).toBeGreaterThanOrEqual(MIN_WINDOW_MS);
         }
       }

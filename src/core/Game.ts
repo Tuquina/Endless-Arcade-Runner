@@ -52,6 +52,8 @@ export class Game {
   readonly view = new PlayerView();
   /** Debug (`?theme=N`): start the background palette N worlds in, without changing gameplay. */
   readonly themeOffset: number;
+  /** Debug (`?at=N`): begin the run N metres in, to look at late-game layouts without playing there. */
+  private readonly startAt: number;
   shake = 0;
   flash = 0;
   time = 0;
@@ -81,6 +83,7 @@ export class Game {
     const params = new URLSearchParams(location.search);
     this.debug = params.has('debug');
     this.themeOffset = (Number(params.get('theme')) || 0) * 400;
+    this.startAt = this.debug ? Math.max(0, Number(params.get('at')) || 0) : 0;
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
       this.reducedMotion = true;
       this.fx.density = 0.4;
@@ -179,9 +182,9 @@ export class Game {
 
   /** Build a fresh layout and put the player at the start, waiting for the first press. */
   private resetRun(): void {
-    this.generator.reset(this.seedCounter++);
-    this.generator.ensureAhead(GEN_AHEAD);
-    this.player.reset(0);
+    this.generator.reset(this.seedCounter++, this.startAt);
+    this.generator.ensureAhead(this.startAt + GEN_AHEAD);
+    this.player.reset(this.startAt);
     this.player.speed = speedAt(0);
     this.difficulty = 0;
     this.distance = this.coins = this.score = 0;

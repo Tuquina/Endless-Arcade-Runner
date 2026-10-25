@@ -1,5 +1,5 @@
 import { Pool } from '../core/Pool';
-import { COIN, HAZARD, Rect, SOLID, type RectKind } from './Rect';
+import { COIN, HAZARD, Rect, SOLID, moverLift, type RectKind, type Wave } from './Rect';
 
 /** Where the world starts (behind the player's spawn at x = 0). */
 export const WORLD_START = -12;
@@ -23,10 +23,11 @@ export class World {
     this.cols = Array.from({ length: ringCols }, () => []);
   }
 
-  reset(): void {
+  /** Empty the world; geometry will start at `origin` (a non-default origin is for debugging far into a run). */
+  reset(origin = WORLD_START): void {
     this.prune(Infinity);
-    this.cursor = WORLD_START;
-    this.colBase = Math.floor(WORLD_START);
+    this.cursor = origin;
+    this.colBase = Math.floor(origin);
   }
 
   add(x0: number, y0: number, x1: number, y1: number, kind: RectKind): Rect {
@@ -37,11 +38,24 @@ export class World {
     r.y1 = y1;
     r.kind = kind;
     r.taken = false;
+    r.mover = false;
     const c0 = Math.floor(x0);
     const c1 = Math.floor(x1);
     r.lastCol = c1;
     if (c1 - this.colBase >= this.ringCols) throw new Error('World ring buffer too small');
     for (let c = c0; c <= c1; c++) this.cols[c & this.mask]!.push(r);
+    return r;
+  }
+
+  /** Hazard that slides up by `amp` tiles following `wave` (see Rect.moverLift). */
+  addMover(x0: number, y0: number, x1: number, y1: number, amp: number, wavelength: number, phase: number, wave: Wave, railTop: number): Rect {
+    const r = this.add(x0, y0, x1, y1, HAZARD);
+    r.mover = true;
+    r.amp = amp;
+    r.wavelength = wavelength;
+    r.phase = phase;
+    r.wave = wave;
+    r.railTop = railTop;
     return r;
   }
 
@@ -59,14 +73,30 @@ export class World {
     if (newBase > this.colBase) this.colBase = newBase;
   }
 
-  /** First rect of `kind` overlapping the box, or null. Allocation-free. */
-  overlap(x0: number, y0: number, x1: number, y1: number, kind: RectKind): Rect | null {
+  /**
+   * First rect of `kind` overlapping the box, or null. Allocation-free.
+   * `px` is the runner's x, which positions movers; omit it (NaN) to test against each mover's
+   * whole swept range instead (used when placing coins).
+   */
+  overlap(x0: number, y0: number, x1: number, y1: number, kind: RectKind, px = NaN): Rect | null {
     const c1 = Math.floor(x1);
     for (let c = Math.floor(x0); c <= c1; c++) {
       const list = this.cols[c & this.mask]!;
       for (let i = 0; i < list.length; i++) {
         const r = list[i]!;
-        if (r.kind === kind && !r.taken && r.x0 < x1 && r.x1 > x0 && r.y0 < y1 && r.y1 > y0) return r;
+        if (r.kind !== kind || r.taken || !(r.x0 < x1 && r.x1 > x0)) continue;
+        let ry0 = r.y0;
+        let ry1 = r.y1;
+        if (r.mover) {
+          if (px === px) {
+            const lift = r.amp * moverLift(r, px);
+            ry0 += lift;
+            ry1 += lift;
+          } else {
+            ry1 += r.amp;
+          }
+        }
+        if (ry0 < y1 && ry1 > y0) return r;
       }
     }
     return null;

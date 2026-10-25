@@ -1,6 +1,6 @@
 import { PLAYER_HEIGHT } from '../physics/constants';
 import type { Game } from '../core/Game';
-import { COIN, HAZARD, SOLID, type Rect } from '../world/Rect';
+import { COIN, HAZARD, SOLID, WAVE_SLAM, moverCycle, moverLift, type Rect } from '../world/Rect';
 import { Confetti } from './Confetti';
 import { GOALS, GOAL_SKIN_IDS } from '../core/skins';
 import { THEMES, ThemeBlender } from './themes';
@@ -103,7 +103,7 @@ export class Renderer {
     ctx.setTransform(1, 0, 0, 1, Math.sin(game.time * 91) * sh, Math.cos(game.time * 77) * sh);
 
     this.drawBackground(game);
-    this.drawWorld(game);
+    this.drawWorld(game, px);
     game.fx.draw(ctx, this.camX, this.groundPx, scale);
     this.drawPlayer(game, px, py);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -228,7 +228,7 @@ export class Renderer {
 
   // ---------------------------------------------------------------- world geometry
 
-  private drawWorld(game: Game): void {
+  private drawWorld(game: Game, runnerX: number): void {
     const { ctx, scale } = this;
     const c = this.theme.c;
     const vis = this.visible;
@@ -279,10 +279,16 @@ export class Renderer {
       ctx.fillRect(x, y, wpx, Math.max(3, scale * 0.12));
     }
 
+    // Movers: drawn at the height the runner will find them (their motion is locked to its x).
+    for (let i = 0; i < vis.length; i++) {
+      const r = vis[i]!;
+      if (r.kind === HAZARD && r.mover) this.drawMover(game, r, runnerX);
+    }
+
     // Spikes: triangle with a lit left face.
     for (let i = 0; i < vis.length; i++) {
       const r = vis[i]!;
-      if (r.kind !== HAZARD) continue;
+      if (r.kind !== HAZARD || r.mover) continue;
       const cx = this.X((r.x0 + r.x1) / 2);
       const base = this.Y(r.y0);
       const half = scale * 0.5;
@@ -361,6 +367,73 @@ export class Renderer {
     }
   }
 
+  private drawMover(game: Game, r: Rect, runnerX: number): void {
+    const { ctx, scale } = this;
+    const c = this.theme.c;
+    const lift = r.amp * moverLift(r, runnerX);
+    const cx = this.X((r.x0 + r.x1) / 2);
+
+    if (r.wave === WAVE_SLAM) {
+      // Crusher: a heavy column hanging from above that slams down. It shudders just before it drops.
+      const u = moverCycle(r, runnerX);
+      const warn = u > 0.4 && u < 0.5;
+      const shake = warn ? Math.sin(game.time * 90) * scale * 0.05 : 0;
+      const wpx = (r.x1 - r.x0 + 0.16) * scale;
+      const x = cx - wpx / 2 + shake;
+      const bottom = this.Y(r.y0 + lift);
+      ctx.fillStyle = warn ? '#ff8aa0' : c.spike;
+      ctx.fillRect(x, -scale, wpx, bottom + scale);
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillRect(x + wpx * 0.72, -scale, wpx * 0.28, bottom + scale);
+      // Teeth along the underside.
+      ctx.fillStyle = '#ffffff';
+      const teeth = 4;
+      const tw = wpx / teeth;
+      for (let i = 0; i < teeth; i++) {
+        ctx.beginPath();
+        ctx.moveTo(x + i * tw, bottom);
+        ctx.lineTo(x + (i + 0.5) * tw, bottom + scale * 0.32);
+        ctx.lineTo(x + (i + 1) * tw, bottom);
+        ctx.closePath();
+        ctx.fill();
+      }
+      return;
+    }
+
+    // Saw: a faint rail shows how far it travels, the blade spins.
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = Math.max(2, scale * 0.05);
+    ctx.setLineDash(DASH);
+    ctx.beginPath();
+    ctx.moveTo(cx, this.Y(r.y0 - 0.15));
+    ctx.lineTo(cx, this.Y(r.railTop));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const cy = this.Y(r.y0 + lift + (r.y1 - r.y0) / 2);
+    const rad = scale * 0.42;
+    const spin = game.time * 9;
+    ctx.fillStyle = c.spike;
+    ctx.beginPath();
+    const teeth = 8;
+    for (let i = 0; i < teeth * 2; i++) {
+      const a = spin + (i * Math.PI) / teeth;
+      const rr = i % 2 ? rad * 0.72 : rad;
+      const px = cx + Math.cos(a) * rr;
+      const py = cy + Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = Math.max(1.5, scale * 0.04);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad * 0.22, 0, 6.283);
+    ctx.fill();
+  }
+
   private drawPlayer(game: Game, px: number, py: number): void {
     const p = game.player;
     if (p.dead) return;
@@ -391,7 +464,8 @@ export class Renderer {
     ctx.strokeStyle = '#ffffff';
     for (let i = 0; i < this.visible.length; i++) {
       const r = this.visible[i]!;
-      ctx.strokeRect(this.X(r.x0), this.Y(r.y1), (r.x1 - r.x0) * scale, Math.min((r.y1 - r.y0) * scale, this.h));
+      const lift = r.mover ? r.amp * moverLift(r, game.player.x) : 0;
+      ctx.strokeRect(this.X(r.x0), this.Y(r.y1 + lift), (r.x1 - r.x0) * scale, Math.min((r.y1 - r.y0) * scale, this.h));
     }
     const p = game.player;
     ctx.strokeStyle = '#00ffff';
