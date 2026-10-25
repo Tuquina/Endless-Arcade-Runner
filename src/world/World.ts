@@ -1,5 +1,5 @@
 import { Pool } from '../core/Pool';
-import { COIN, HAZARD, PAD, RING, Rect, SOLID, WAVE_SLAM, moverLift, type RectKind, type Wave } from './Rect';
+import { COIN, HAZARD, PAD, RING, Rect, SOLID, TRIGGER, WAVE_SLAM, moverLift, type RectKind, type Wave } from './Rect';
 
 /** Where the world starts (behind the player's spawn at x = 0). */
 export const WORLD_START = -12;
@@ -50,7 +50,8 @@ export class World {
     r.kind = kind;
     r.taken = false;
     r.mover = false;
-    if (kind === PAD || kind === RING) this.special = true;
+    r.code = 0;
+    if (kind === PAD || kind === RING || kind === TRIGGER) this.special = true;
     const c0 = Math.floor(x0);
     const c1 = Math.floor(x1);
     r.lastCol = c1;

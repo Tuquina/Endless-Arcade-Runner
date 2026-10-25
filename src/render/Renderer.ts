@@ -1,7 +1,6 @@
 import { PLAYER_HEIGHT } from '../physics/constants';
 import type { Game } from '../core/Game';
-import { COIN, HAZARD, PAD, RING, SOLID, WAVE_SLAM, moverCycle, moverLift, type Rect } from '../world/Rect';
-import { LEVELS } from '../rhythm/levels';
+import { COIN, HAZARD, PAD, PORTAL_BALL, PORTAL_CUBE, PORTAL_GRAVITY_DOWN, PORTAL_GRAVITY_UP, PORTAL_SHIP, PORTAL_SPEED, PORTAL_WAVE, RING, RING_FLIP, SOLID, TRIGGER, WAVE_SLAM, moverCycle, moverLift, type Rect } from '../world/Rect';
 import { Confetti } from './Confetti';
 import { hash } from './hash';
 import { GroundPainter } from './Ground';
@@ -24,6 +23,16 @@ const MAX_PIXELS = 4_200_000;
 const GROUND_DEPTH = -1;
 
 const DASH: number[] = [10, 10];
+/** Portal colours and labels by code. */
+const PORTAL_STYLE: Record<number, { color: string; label: string; hint: string }> = {
+  [PORTAL_GRAVITY_UP]: { color: '#ffd23f', label: '↓', hint: 'GRAVEDAD NORMAL' },
+  [PORTAL_GRAVITY_DOWN]: { color: '#35b8ff', label: '↑', hint: '¡AL TECHO!' },
+  [PORTAL_CUBE]: { color: '#2ee6a6', label: '■', hint: 'SALTO' },
+  [PORTAL_BALL]: { color: '#ff5d73', label: '●', hint: 'BOLA: TOCÁ PARA CAMBIAR DE LADO' },
+  [PORTAL_SHIP]: { color: '#ff7ad9', label: '▲', hint: 'NAVE: MANTENÉ PARA SUBIR' },
+  [PORTAL_WAVE]: { color: '#35e0ff', label: '◆', hint: 'ONDA: MANTENÉ = SUBE · SOLTÁ = BAJA' },
+  [PORTAL_SPEED]: { color: '#ff9a3c', label: '»', hint: '¡VELOCIDAD!' },
+};
 const JUDGE_TEXT = { perfect: '¡PERFECTO!', good: 'BIEN', ok: 'OK', miss: '' } as const;
 const JUDGE_COLOR = { perfect: '#ffd23f', good: '#2ee6a6', ok: '#6ec1ff', miss: '#ffffff' } as const;
 
@@ -59,6 +68,9 @@ export class Renderer {
   private skyGrad: CanvasGradient | null = null;
   private skyVersion = -1;
   private readonly visible: Rect[] = [];
+  /** The first portal of each kind in the current level gets a hint above it. */
+  private firstPortals = new Map<number, number>();
+  private firstPortalsOf: unknown = null;
   /** Rhythm mode: 0..1 flash on every beat (scaled by the section's energy). */
   private pulse = 0;
 
@@ -281,6 +293,10 @@ export class Renderer {
     for (let i = 0; i < vis.length; i++) {
       const r = vis[i]!;
       if (r.kind !== SOLID || r.y0 <= GROUND_DEPTH) continue;
+      if (r.y1 >= 12) {
+        this.drawCeiling(r);
+        continue;
+      }
       const x = this.X(r.x0);
       const y = this.Y(r.y1);
       const wpx = (r.x1 - r.x0) * scale;
@@ -313,13 +329,18 @@ export class Renderer {
     for (let i = 0; i < vis.length; i++) {
       const r = vis[i]!;
       if (r.kind !== HAZARD || r.mover) continue;
-      const cx = this.X((r.x0 + r.x1) / 2);
-      const base = this.Y(r.y0);
+      const mx = (r.x0 + r.x1) / 2;
+      const cx = this.X(mx);
+      // Spikes hanging from a ceiling point down (solid above, nothing to stand on below).
+      const w = game.world;
+      const hanging = !w.overlap(mx - 0.05, r.y0 - 0.1, mx + 0.05, r.y0 - 0.02, SOLID) && !!w.overlap(mx - 0.05, r.y1 + 0.02, mx + 0.05, r.y1 + 0.1, SOLID);
+      const base = hanging ? this.Y(r.y1) : this.Y(r.y0);
+      const tip = hanging ? base + scale : base - scale;
       const half = scale * 0.5;
       ctx.fillStyle = c.spike;
       ctx.beginPath();
       ctx.moveTo(cx - half, base);
-      ctx.lineTo(cx, base - scale);
+      ctx.lineTo(cx, tip);
       ctx.lineTo(cx + half, base);
       ctx.closePath();
       ctx.fill();
@@ -329,7 +350,7 @@ export class Renderer {
       ctx.fillStyle = 'rgba(255,255,255,0.28)';
       ctx.beginPath();
       ctx.moveTo(cx - half, base);
-      ctx.lineTo(cx, base - scale);
+      ctx.lineTo(cx, tip);
       ctx.lineTo(cx, base);
       ctx.closePath();
       ctx.fill();
@@ -358,6 +379,7 @@ export class Renderer {
       const r = vis[i]!;
       if (r.kind === PAD) this.drawPad(r);
       else if (r.kind === RING) this.drawRing(r, game);
+      else if (r.kind === TRIGGER) this.drawPortal(r, game);
     }
 
     if (game.inRhythm) {
@@ -435,12 +457,13 @@ export class Renderer {
     const cx = this.X((r.x0 + r.x1) / 2);
     const cy = this.Y((r.y0 + r.y1) / 2);
     const rad = scale * 0.42 * (1 + 0.12 * this.pulse);
-    ctx.strokeStyle = 'rgba(255,210,63,0.35)';
+    const flip = r.code === RING_FLIP;
+    ctx.strokeStyle = flip ? 'rgba(53,184,255,0.4)' : 'rgba(255,210,63,0.35)';
     ctx.lineWidth = scale * 0.22;
     ctx.beginPath();
     ctx.arc(cx, cy, rad, 0, 6.283);
     ctx.stroke();
-    ctx.strokeStyle = '#ffd23f';
+    ctx.strokeStyle = flip ? '#35b8ff' : '#ffd23f';
     ctx.lineWidth = scale * 0.09;
     ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
@@ -448,6 +471,99 @@ export class Renderer {
     ctx.beginPath();
     ctx.arc(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, scale * 0.06, 0, 6.283);
     ctx.fill();
+  }
+
+  /** Ceiling slab of a gravity level: a dark band with a lit underside the runner can walk on. */
+  private drawCeiling(r: Rect): void {
+    const { ctx, scale } = this;
+    const c = this.theme.c;
+    const x = this.X(r.x0);
+    const wpx = (r.x1 - r.x0) * scale + 1;
+    const bottom = this.Y(r.y0);
+    ctx.fillStyle = c.mid;
+    ctx.fillRect(x, -40, wpx, bottom + 40);
+    // Faint bands that scroll with the slab, so the ceiling reads as a surface and shows speed.
+    ctx.fillStyle = c.far;
+    for (let gx = Math.ceil(r.x0 / 2) * 2; gx < r.x1; gx += 2) ctx.fillRect(this.X(gx), -40, Math.max(2, scale * 0.12), bottom + 40);
+    ctx.fillStyle = c.ground;
+    ctx.fillRect(x, bottom - scale * 0.35, wpx, scale * 0.35);
+    ctx.fillStyle = c.groundTop;
+    ctx.fillRect(x, bottom - Math.max(3, scale * 0.12), wpx, Math.max(3, scale * 0.12));
+  }
+
+  /** Gravity and form portals: a tall glowing oval with the symbol of what it does. */
+  private drawPortal(r: Rect, game: Game): void {
+    const { ctx, scale } = this;
+    const st = PORTAL_STYLE[r.code] ?? PORTAL_STYLE[PORTAL_CUBE]!;
+    const ceil = game.rhythm.level?.def.ceiling ?? 5;
+    if (r.code === PORTAL_SPEED) {
+      this.drawSpeedPortal(r, game, ceil);
+      return;
+    }
+    const cx = this.X((r.x0 + r.x1) / 2);
+    const cy = this.Y(ceil / 2);
+    const ry = (ceil / 2) * scale * 0.92;
+    const rx = scale * (0.45 + 0.05 * this.pulse);
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = st.color;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx * 1.6, ry, 0, 0, 6.283);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = st.color;
+    ctx.lineWidth = scale * 0.14;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, 6.283);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = scale * 0.04;
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `900 ${Math.round(scale * 0.7)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(st.label, cx, cy);
+
+    const lv = game.rhythm.level;
+    if (lv && this.firstPortalsOf !== lv) {
+      this.firstPortalsOf = lv;
+      this.firstPortals.clear();
+      for (const q of lv.rects) if (q.kind === TRIGGER && !this.firstPortals.has(q.code ?? 0)) this.firstPortals.set(q.code ?? 0, q.x0);
+    }
+    const first = this.firstPortals.get(r.code);
+    if (first !== undefined && Math.abs(first - r.x0) < 0.01) {
+      ctx.font = `900 ${Math.round(scale * 0.36)}px system-ui, sans-serif`;
+      ctx.fillStyle = st.color;
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(st.hint, cx, this.Y(ceil) + scale * 1.4);
+    }
+  }
+
+  /** Speed portal: a column of chevrons, one to three depending on how fast it makes the runner. */
+  private drawSpeedPortal(r: Rect, game: Game, ceil: number): void {
+    const { ctx, scale } = this;
+    const base = game.rhythm.level?.speed ?? r.amp;
+    const ratio = r.amp / base;
+    const n = ratio < 0.95 ? 1 : ratio < 1.1 ? 1 : ratio < 1.4 ? 2 : 3;
+    const dir = ratio < 0.95 ? -1 : 1;
+    const cx = this.X((r.x0 + r.x1) / 2);
+    const color = ratio < 0.95 ? '#6ec1ff' : ratio < 1.1 ? '#2ee6a6' : ratio < 1.4 ? '#ff9a3c' : '#ff4d6d';
+    ctx.strokeStyle = color;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = scale * 0.16;
+    const h = scale * 0.45;
+    for (let row = 0; row < 3; row++) {
+      const cy = this.Y(ceil * (0.25 + row * 0.25));
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const ox = (i - (n - 1) / 2) * scale * 0.4 * dir;
+        ctx.moveTo(cx + ox - h * 0.6 * dir, cy - h);
+        ctx.lineTo(cx + ox + h * 0.4 * dir, cy);
+        ctx.lineTo(cx + ox - h * 0.6 * dir, cy + h);
+      }
+      ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
   }
 
   /** Beat ticks, jump guides, checkpoints, best-progress marker, finish line and judgement popups. */
@@ -459,10 +575,16 @@ export class Renderer {
     const x1 = this.camX + this.viewW + 1;
 
     // A tick on the ground for every beat, longer on the first beat of a bar.
-    const beatLen = lv.speed * lv.song.stepDur * 4;
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    for (let k = Math.max(0, Math.ceil(x0 / beatLen)); k * beatLen < x1; k++) {
-      const bx = this.X(k * beatLen);
+    const bxs = lv.beatX;
+    let k0 = 0;
+    for (let lo = 0, hi = bxs.length; lo < hi; ) {
+      const mid = (lo + hi) >> 1;
+      if (bxs[mid]! < x0) lo = k0 = mid + 1;
+      else hi = mid;
+    }
+    for (let k = k0; k < bxs.length && bxs[k]! < x1; k++) {
+      const bx = this.X(bxs[k]!);
       const bar = k % 4 === 0;
       ctx.fillRect(bx - 1, this.groundPx + scale * 0.05, 2, scale * (bar ? 0.4 : 0.2));
     }
@@ -524,7 +646,7 @@ export class Renderer {
       ctx.fillText(r.practice ? 'PRÁCTICA' : `INTENTO ${rec.attempts}`, sx, this.Y(4.2));
       ctx.font = `800 ${Math.round(scale * 0.38)}px system-ui, sans-serif`;
       ctx.fillStyle = 'rgba(255,255,255,0.6)';
-      ctx.fillText(`${LEVELS[r.index]!.name} · ${lv.def.song.bpm} BPM`, sx, this.Y(3.1));
+      ctx.fillText(`${lv.def.name} · ${lv.def.song.bpm} BPM`, sx, this.Y(3.1));
     }
 
     // Finish gate: a checkered column.
@@ -551,7 +673,9 @@ export class Renderer {
         ctx.fillStyle = JUDGE_COLOR[pop.j];
         ctx.textAlign = 'center';
         ctx.font = `900 ${Math.round(scale * (0.42 + (pop.j === 'perfect' ? 0.12 : 0)))}px system-ui, sans-serif`;
-        ctx.fillText(JUDGE_TEXT[pop.j], this.X(runnerX), this.Y(pop.y + 2.2 + age * 1.5));
+        // Above the runner, or below it when it is up near a ceiling (so it never hides under the HUD).
+        const high = pop.y > 2;
+        ctx.fillText(JUDGE_TEXT[pop.j], this.X(runnerX), this.Y(high ? pop.y - 1.1 - age : pop.y + 2.2 + age * 1.5));
         ctx.globalAlpha = 1;
       }
     }
@@ -628,8 +752,9 @@ export class Renderer {
     const p = game.player;
     if (p.dead) return;
     const size = this.scale;
+    const ctx = this.ctx;
     // A soft shadow on the ground under the runner (smaller and fainter the higher it jumps).
-    if (py < 4 && game.world.overlap(px - 0.3, -0.6, px + 0.3, -0.4, SOLID)) {
+    if (p.g > 0 && p.form !== 'ship' && py < 4 && game.world.overlap(px - 0.3, -0.6, px + 0.3, -0.4, SOLID)) {
       const k = 1 - py / 4;
       this.ctx.fillStyle = `rgba(0,0,0,${(0.3 * k).toFixed(3)})`;
       this.ctx.beginPath();
@@ -638,10 +763,107 @@ export class Renderer {
     }
     // The sprite (1×1) is slightly larger than the hitbox (0.8): centre it on the hitbox.
     const foot = this.Y(py) + (size - PLAYER_HEIGHT * size) / 2;
-    game.view.draw(this.ctx, this.X(px), foot, size, !p.grounded);
+    const cx = this.X(px);
+    const cy = this.Y(py + PLAYER_HEIGHT / 2);
+    ctx.save();
+    // Flipped gravity: mirror the runner around its centre so its feet are on the ceiling.
+    if (p.g < 0) {
+      ctx.translate(0, 2 * cy);
+      ctx.scale(1, -1);
+    }
+    if (p.form === 'wave') {
+      // A dart pointing where it is heading, with a fading zigzag trail behind it.
+      this.drawWaveTrail(game, px, py);
+      const ang = Math.atan2(-p.vy * p.g, p.speed);
+      ctx.translate(cx, cy);
+      ctx.rotate(ang);
+      const s = size;
+      ctx.fillStyle = game.skin.color;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = s * 0.06;
+      ctx.beginPath();
+      ctx.moveTo(0.55 * s, 0);
+      ctx.lineTo(-0.4 * s, -0.36 * s);
+      ctx.lineTo(-0.22 * s, 0);
+      ctx.lineTo(-0.4 * s, 0.36 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else if (p.form === 'ball') {
+      // A rolling wheel around the character.
+      ctx.translate(cx, cy);
+      ctx.rotate(px * 1.4);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.62, 0, 6.283);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = size * 0.07;
+      ctx.stroke();
+      ctx.beginPath();
+      for (let k = 0; k < 4; k++) {
+        const a = (k * Math.PI) / 2;
+        ctx.moveTo(Math.cos(a) * size * 0.45, Math.sin(a) * size * 0.45);
+        ctx.lineTo(Math.cos(a) * size * 0.62, Math.sin(a) * size * 0.62);
+      }
+      ctx.stroke();
+      ctx.translate(-cx, -cy);
+      game.view.draw(ctx, cx, foot - size * 0.08, size * 0.82, !p.grounded);
+    } else if (p.form === 'ship') {
+      // A little rocket under a smaller character, nose tilted by the climb rate.
+      ctx.translate(cx, cy);
+      ctx.rotate(Math.max(-0.5, Math.min(0.5, -p.vy * p.g * 0.06)));
+      const s = size;
+      ctx.fillStyle = '#ff7ad9';
+      ctx.beginPath();
+      ctx.moveTo(-0.62 * s, 0.05 * s);
+      ctx.lineTo(0.7 * s, 0.12 * s);
+      ctx.quadraticCurveTo(0.45 * s, 0.42 * s, -0.5 * s, 0.4 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillRect(-0.55 * s, 0.26 * s, 1.0 * s, 0.1 * s);
+      const flame = 0.18 + 0.12 * Math.abs(Math.sin(game.time * 40));
+      ctx.fillStyle = '#ffd23f';
+      ctx.beginPath();
+      ctx.moveTo(-0.62 * s, 0.12 * s);
+      ctx.lineTo(-(0.62 + flame) * s, 0.22 * s);
+      ctx.lineTo(-0.58 * s, 0.32 * s);
+      ctx.closePath();
+      ctx.fill();
+      game.view.draw(ctx, -0.05 * s, 0.1 * s, s * 0.62, false);
+    } else {
+      game.view.draw(ctx, cx, foot, size, !p.grounded);
+    }
+    ctx.restore();
   }
 
   // ---------------------------------------------------------------- overlays
+
+  private readonly waveTrail: number[] = [];
+
+  /** The wave leaves its zigzag behind (world coordinates, drawn before the flip transform). */
+  private drawWaveTrail(game: Game, px: number, py: number): void {
+    const t = this.waveTrail;
+    const n = t.length;
+    if (n >= 2 && (px < t[n - 2]! - 1 || px - t[n - 2]! > 3)) t.length = 0;
+    t.push(px, py + 0.4);
+    if (t.length > 120) t.splice(0, t.length - 120);
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.strokeStyle = game.skin.color;
+    ctx.lineWidth = Math.max(2, this.scale * 0.14);
+    ctx.lineJoin = 'round';
+    for (let i = 2; i < t.length; i += 2) {
+      ctx.globalAlpha = (i / t.length) * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(this.X(t[i - 2]!), this.Y(t[i - 1]!));
+      ctx.lineTo(this.X(t[i]!), this.Y(t[i + 1]!));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
   /** Only the in-world "new record" banner lives on the canvas; the rest of the HUD is DOM. */
   private drawBanner(game: Game): void {

@@ -41,12 +41,14 @@ export interface Section {
   arpRate?: 8 | 16;
   /** Sustained chord pad. */
   pad?: boolean;
-  /** Lead melody: one token per 16th, a scale degree with `+`/`-` octave marks, `-` tie, `.` rest. */
+  /** Lead melody: one token per 16th, a scale degree with optional `#`/`b` and `+`/`-` octave marks, `-` tie, `.` rest. */
   lead?: string;
   /** Obstacle chart (see rhythm/level.ts), cycled like the patterns. */
   chart?: string;
   /** 0..1, drives the visual pulse. */
   energy: number;
+  /** Tempo of this section if it differs from the song's (tempo changes, half-time breaks, sprints). */
+  bpm?: number;
   /** Snare roll over the last bar, white-noise riser into the next section, crash on the first beat. */
   fill?: boolean;
   riser?: boolean;
@@ -68,7 +70,10 @@ export interface Song {
 /** Per-step lookups prepared once per song. */
 export interface CompiledSong {
   song: Song;
+  /** 16th-note length at the song's base tempo. */
   stepDur: number;
+  /** Song time (s) of every step, plus one past the end: sections can change tempo. */
+  stepTimes: Float64Array;
   totalSteps: number;
   /** First step of each section, plus a final entry = totalSteps. */
   sectionStart: number[];
@@ -153,10 +158,10 @@ function leadLine(song: Song, sec: Section, steps: number): Note[] {
     }
     last = -1;
     if (t === '.') continue;
-    const m = /^(-?\d+)([+-]*)$/.exec(t);
+    const m = /^(-?\d+)([#b]?)([+-]*)$/.exec(t);
     if (!m) throw new Error(`${song.id}/${sec.name}: bad lead token "${t}"`);
-    let midi = degreeToMidi(song.root, song.scale, Number(m[1]));
-    for (const c of m[2]!) midi += c === '+' ? 12 : -12;
+    let midi = degreeToMidi(song.root, song.scale, Number(m[1])) + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
+    for (const c of m[3]!) midi += c === '+' ? 12 : -12;
     out[i] = { midi, len: 1 };
     last = i;
   }
@@ -171,9 +176,21 @@ export function compileSong(song: Song): CompiledSong {
     total += s.bars * STEPS_PER_BAR;
   }
   sectionStart.push(total);
+  const stepTimes = new Float64Array(total + 1);
+  let t = 0;
+  let k = 0;
+  song.sections.forEach((s) => {
+    const d = 60 / (s.bpm ?? song.bpm) / 4;
+    for (let i = 0; i < s.bars * STEPS_PER_BAR; i++, k++) {
+      stepTimes[k] = t;
+      t += d;
+    }
+  });
+  stepTimes[total] = t;
   return {
     song,
     stepDur: 60 / song.bpm / 4,
+    stepTimes,
     totalSteps: total,
     sectionStart,
     lanes: song.sections.map((s) => {
@@ -183,6 +200,27 @@ export function compileSong(song: Song): CompiledSong {
     bass: song.sections.map((s) => bassLine(song, s, s.bars * STEPS_PER_BAR)),
     lead: song.sections.map((s) => leadLine(song, s, s.bars * STEPS_PER_BAR)),
   };
+}
+
+/** Length of step `step` (s). */
+export function stepLength(c: CompiledSong, step: number): number {
+  const i = Math.max(0, Math.min(c.totalSteps - 1, step));
+  return c.stepTimes[i + 1]! - c.stepTimes[i]!;
+}
+
+/** Fractional step at song time `t` (binary search over the tempo map). */
+export function stepAtTime(c: CompiledSong, t: number): number {
+  const st = c.stepTimes;
+  if (t <= 0) return t / c.stepDur;
+  if (t >= st[c.totalSteps]!) return c.totalSteps + (t - st[c.totalSteps]!) / c.stepDur;
+  let lo = 0;
+  let hi = c.totalSteps;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (st[mid]! <= t) lo = mid;
+    else hi = mid;
+  }
+  return lo + (t - st[lo]!) / (st[lo + 1]! - st[lo]!);
 }
 
 /** Section index containing a global step. */
@@ -207,7 +245,7 @@ export function scheduleSongStep(e: SongEnv, c: CompiledSong, step: number, t: n
   const local = step - c.sectionStart[si]!;
   const secSteps = sec.bars * STEPS_PER_BAR;
   const s16 = local % STEPS_PER_BAR;
-  const dur = c.stepDur;
+  const dur = stepLength(c, step);
   const { ctx, out } = e;
   const L = c.lanes[si]!;
   const song = c.song;
@@ -267,7 +305,8 @@ export function scheduleSongStep(e: SongEnv, c: CompiledSong, step: number, t: n
   const b = c.bass[si]![local]!;
   if (b.len) {
     voice(ctx, out, {
-      type: song.bass, freq: midiToFreq(b.midi), start: t, dur: dur * b.len * 0.95, gain: 0.2,
+      // A sine bass (808) carries much more low end than a filtered saw: keep it level with the others.
+      type: song.bass, freq: midiToFreq(b.midi), start: t, dur: dur * b.len * 0.95, gain: song.bass === 'sine' ? 0.13 : 0.2,
       shape: b.len > 1 ? 'hold' : 'pluck', cutoff: 900, cutoffEnd: 260, q: 3,
     });
   }
