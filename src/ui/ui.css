@@ -1180,3 +1180,45 @@
 #levels-title {
   font-size: clamp(1.5rem, 7.5vw, 2rem);
 }
+
+/* ---------- easter egg ---------- */
+.menu-skin {
+  cursor: pointer;
+  touch-action: manipulation;
+  pointer-events: auto;
+}
+.menu-skin.poke {
+  animation: poke 0.18s ease-out;
+}
+@keyframes poke {
+  40% {
+    transform: scale(0.82, 1.15);
+  }
+}
+.cheat-badge {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  color: #2a1606;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.4rem 1rem;
+  border-radius: 1rem;
+  background: linear-gradient(90deg, #ffd23f, #ff7ad9, #35e0ff);
+  cursor: pointer;
+  touch-action: manipulation;
+  animation: pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.6) both;
+}
+.cheat-badge[hidden] {
+  display: none;
+}
+.cheat-badge b {
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cheat-badge small {
+  font-size: 0.7rem;
+  font-weight: 700;
+}

@@ -30,6 +30,8 @@ const RESUME_COUNTDOWN = 1.8;
 export const COIN_VALUE = 10;
 /** Difficulty is shown to the player as a level from 1 to this value. */
 export const MAX_LEVEL = 10;
+/** sessionStorage key of the easter egg (see Game.setCheats). */
+const CHEAT_KEY = 'onebutton.secret';
 /** Practice mode: pause between dying and reappearing at the last checkpoint. */
 const RESPAWN_DELAY = 0.7;
 /** After finishing a rhythm level, the runner keeps going this far past the finish line. */
@@ -128,6 +130,7 @@ export class Game {
     document.addEventListener('visibilitychange', () => document.hidden && this.pause());
     window.addEventListener('blur', () => this.pause());
     this.audio.latencyMs = this.save.data.latency;
+    this.cheats = Game.readCheatFlag();
     this.reconcileSkins();
     this.resetRun();
     this.audio.setMusicMode('on'); // takes effect after the first user gesture
@@ -185,7 +188,46 @@ export class Game {
 
   /** The first level is always open; each further level opens when the previous one is completed. */
   isLevelUnlocked(i: number): boolean {
-    return i === 0 || (i < this.levels.length && this.levelRecord(i - 1).done);
+    if (i < 0 || i >= this.levels.length) return false;
+    return this.cheats || i === 0 || this.levelRecord(i - 1).done;
+  }
+
+  // ---------------------------------------------------------------- easter egg
+
+  /**
+   * Secret: tapping the character in the main menu 11 times unlocks every skin and level for this
+   * browser session (and the hidden mode). Nothing is written to the save: turning it off, or a new
+   * session, brings back exactly what was earned. Real progress made meanwhile is still recorded.
+   */
+  cheats = false;
+
+  private static readCheatFlag(): boolean {
+    try {
+      return sessionStorage.getItem(CHEAT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  setCheats(on: boolean): void {
+    if (on === this.cheats) return;
+    this.cheats = on;
+    try {
+      if (on) sessionStorage.setItem(CHEAT_KEY, '1');
+      else sessionStorage.removeItem(CHEAT_KEY);
+    } catch {
+      /* private mode: the flag just lives in memory */
+    }
+    if (!on) {
+      // Back to what was really earned: drop a borrowed skin and leave any borrowed level.
+      if (!this.isUnlocked(this.save.data.skin)) this.selectSkinUnchecked(DEFAULT_SKIN);
+      if (this.musical && !this.isLevelUnlocked(this.levelIndex)) this.levelIndex = 0;
+      if (this.state === 'menu') this.resetRun();
+    } else {
+      this.audio.sfx('record');
+    }
+    this.refreshGoalTarget();
+    this.onState?.();
   }
 
   /** Completed levels and collected discos across both music campaigns (skin objectives). */
@@ -306,7 +348,18 @@ export class Game {
   }
 
   isUnlocked(id: string): boolean {
+    return this.cheats || this.owns(id);
+  }
+
+  /** Earned for real (the save), regardless of the easter egg. */
+  private owns(id: string): boolean {
     return this.save.data.unlocked.includes(id);
+  }
+
+  private selectSkinUnchecked(id: string): void {
+    this.save.data.skin = id;
+    this.save.flush();
+    this.applySkin();
   }
 
   /** How far along a skin's objective the player is, from what is saved (for menus). */
@@ -375,7 +428,7 @@ export class Game {
   private reconcileSkins(): void {
     const d = this.save.data;
     d.unlocked = reconcileUnlocked(d.unlocked, this.savedProgress());
-    if (!d.unlocked.includes(d.skin)) d.skin = DEFAULT_SKIN;
+    if (!this.isUnlocked(d.skin)) d.skin = DEFAULT_SKIN;
     this.refreshDistanceGoal();
     this.refreshGoalTarget();
     this.applySkin();
@@ -384,7 +437,7 @@ export class Game {
   private refreshDistanceGoal(): void {
     let next = Infinity;
     for (const s of SKINS) {
-      if (s.goal.type === 'distance' && s.goal.n > 0 && !this.isUnlocked(s.id)) next = Math.min(next, s.goal.n);
+      if (s.goal.type === 'distance' && s.goal.n > 0 && !this.owns(s.id)) next = Math.min(next, s.goal.n);
     }
     this.nextDistanceGoal = next;
   }
