@@ -702,3 +702,127 @@
     display: none;
   }
 }
+
+/* ---------- game mode + difficulty ---------- */
+.modes {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+.mode-chip {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  color: var(--ink);
+  flex: 1;
+  min-height: 2.9rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.15;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.14);
+  touch-action: manipulation;
+}
+.mode-chip b {
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.mode-chip small {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+.mode-chip[aria-pressed='true'] {
+  background: rgba(255, 210, 63, 0.16);
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+.mode-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.seg {
+  display: flex;
+  width: 100%;
+  padding: 0.25rem;
+  gap: 0.25rem;
+  border-radius: 1rem;
+  background: rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12);
+}
+.seg-btn {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex: 1;
+  min-height: 2.7rem;
+  border-radius: 0.75rem;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.seg-btn:active {
+  transform: scale(0.96);
+}
+.seg-btn[aria-checked='true'] {
+  color: #0b2a20;
+  background: linear-gradient(180deg, #4dffc0, var(--green));
+}
+.seg-btn[data-difficulty='hard'][aria-checked='true'] {
+  color: #2a0b0b;
+  background: linear-gradient(180deg, #ff9a8a, #ff5a4d);
+}
+.seg-btn[data-difficulty='easy'][aria-checked='true'] {
+  color: #0b2236;
+  background: linear-gradient(180deg, #a6dcff, #6ec1ff);
+}
+.seg-btn:focus-visible,
+.mode-chip:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+.diff-hint {
+  margin: -0.2rem 0 0;
+  min-height: 2.4em;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.dead-diff {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+/* Short screens: trim the menu so Jugar stays on screen. */
+@media (max-height: 760px) {
+  .diff-hint,
+  .mode-chip small,
+  .hint {
+    display: none;
+  }
+  .menu-skin {
+    width: 4.2rem;
+    height: 4.2rem;
+  }
+  .mode-chip {
+    min-height: 2.4rem;
+  }
+  .seg-btn {
+    min-height: 2.4rem;
+  }
+}

@@ -1,12 +1,14 @@
 import { Rng } from '../core/Rng';
 import {
   MECHANICS,
-  UNLOCK_DISTANCE,
+  DIFFICULTIES,
   difficultyAt,
   focusAt,
   pressureAt,
   reactionTime,
   speedAt,
+  unlockAt,
+  type DifficultyProfile,
   type Mechanic,
 } from './Difficulty';
 import { SegmentBuilder } from './SegmentBuilder';
@@ -43,16 +45,18 @@ export class Generator {
   private readonly introduced = new Set<Mechanic>();
   private last: Prefab | null = null;
   private introducedNow = false;
+  private profile: DifficultyProfile = DIFFICULTIES.normal;
 
   constructor(private readonly world: World, private readonly prefabs: Prefab[] = PREFABS) {}
 
   /** Start a new level. `startAt` (metres) is only for debugging: begin the layout further along. */
-  reset(seed: number, startAt = 0): void {
+  reset(seed: number, startAt = 0, profile: DifficultyProfile = DIFFICULTIES.normal): void {
+    this.profile = profile;
     this.rng.seed(seed);
     this.introduced.clear();
     this.last = null;
     // Debugging far into a run: skip the "first appearance" ceremony of mechanics already unlocked.
-    if (startAt > 0) for (const m of MECHANICS) if (UNLOCK_DISTANCE[m] <= startAt) this.introduced.add(m);
+    if (startAt > 0) for (const m of MECHANICS) if (unlockAt(m, profile) <= startAt) this.introduced.add(m);
     this.world.reset(startAt + WORLD_START);
     this.world.appendFlat(START_RUNWAY + 12);
   }
@@ -64,12 +68,13 @@ export class Generator {
 
   private appendNext(): void {
     const dist = this.world.cursor;
-    const d = difficultyAt(dist);
-    const pressure = pressureAt(dist);
+    const pr = this.profile;
+    const d = difficultyAt(dist, pr);
+    const pressure = pressureAt(dist, pr);
     const speed = speedAt(d);
 
     // Flat breather: guaranteed reaction time plus a random extra that fades as difficulty rises.
-    this.world.appendFlat(speed * reactionTime(d, pressure) + this.rng.range(0, 5 * (1 - d) * (1 - pressure)));
+    this.world.appendFlat(speed * reactionTime(d, pressure, pr) + this.rng.range(0, 5 * (1 - d) * (1 - pressure)));
 
     const prefab = this.choose(dist, d, pressure);
     const segStart = this.world.cursor;
@@ -124,7 +129,7 @@ export class Generator {
     this.introducedNow = false;
     // Newly unlocked mechanic that hasn't been shown yet → show its easiest usable prefab.
     for (const m of MECHANICS) {
-      if (dist >= UNLOCK_DISTANCE[m] && !this.introduced.has(m)) {
+      if (dist >= unlockAt(m, this.profile) && !this.introduced.has(m)) {
         this.introduced.add(m);
         let easiest: Prefab | null = null;
         for (const p of this.prefabs) {
@@ -142,7 +147,7 @@ export class Generator {
     const eligible: Prefab[] = [];
     const weights: number[] = [];
     for (const p of this.prefabs) {
-      if (dist < UNLOCK_DISTANCE[p.mechanic] || d < p.minD || d > p.maxD || !this.usable(p, d)) continue;
+      if (dist < unlockAt(p.mechanic, this.profile) || d < p.minD || d > p.maxD || !this.usable(p, d)) continue;
       if (p === this.last && this.prefabs.length > 1) continue;
       let w = p.weight ?? 1;
       if (focus.includes(p.mechanic)) w *= FOCUS_BOOST;

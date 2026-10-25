@@ -52,6 +52,9 @@
           <canvas id="menu-skin" class="menu-skin" aria-hidden="true"></canvas>
           <h1 class="logo"><span>ONE</span><span>BUTTON</span></h1>
           <p class="menu-best">RÉCORD <b id="menu-best">0</b></p>
+          <div class="modes" id="mode-row" role="group" aria-label="Modo de juego"></div>
+          <div class="seg" id="diff-row" role="radiogroup" aria-label="Dificultad"></div>
+          <p id="diff-hint" class="diff-hint"></p>
           <div class="goal" aria-live="polite">
             <div class="goal-text"><span id="goal-label">Próximo aspecto</span><b id="goal-num"></b></div>
             <div class="goal-bar"><i id="goal-fill"></i></div>
@@ -85,6 +88,7 @@
           <p id="dead-unlock" class="record-badge unlock-badge" hidden></p>
           <p class="dead-label">Puntuación</p>
           <p id="dead-score" class="dead-score">0</p>
+          <p id="dead-diff" class="dead-diff"></p>
           <p class="dead-meta"><b id="dead-dist">0</b> m · Récord <b id="dead-best">0</b> · <i class="coin-dot"></i> <b id="dead-coins">0</b></p>
           <p id="dead-next" class="dead-next"></p>
           <button class="btn btn-primary btn-xl" data-action="retry">Reintentar</button>

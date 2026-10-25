@@ -1,7 +1,8 @@
 import { Input } from '../input/Input';
 import { Player } from '../physics/Player';
-import { Save } from '../storage/Save';
-import { difficultyAt, speedAt } from '../world/Difficulty';
+import { Save, type BestRecord } from '../storage/Save';
+import { DIFFICULTIES, difficultyAt, speedAt, type DifficultyId, type DifficultyProfile } from '../world/Difficulty';
+import { DEFAULT_MODE, type GameMode } from './modes';
 import { Generator } from '../world/Generator';
 import { COIN } from '../world/Rect';
 import { World } from '../world/World';
@@ -117,6 +118,34 @@ export class Game {
     this.audio.setMusicMode('on'); // takes effect after the first user gesture
   }
 
+  /** Selected game mode (only Endless exists so far) and endless difficulty. */
+  get mode(): GameMode {
+    return DEFAULT_MODE;
+  }
+
+  get difficultyId(): DifficultyId {
+    return this.save.data.difficulty;
+  }
+
+  get profile(): DifficultyProfile {
+    return DIFFICULTIES[this.save.data.difficulty];
+  }
+
+  /** Menu action: pick the endless difficulty. The idle level is rebuilt so the menu matches. */
+  setDifficulty(id: DifficultyId): void {
+    if (this.state !== 'menu' || id === this.save.data.difficulty) return;
+    this.save.data.difficulty = id;
+    this.save.flush();
+    this.resetRun();
+    this.refreshGoalTarget();
+    this.onState?.();
+  }
+
+  /** Record of the selected difficulty. */
+  get record(): BestRecord {
+    return this.save.data.records[this.save.data.difficulty];
+  }
+
   /** Currently selected skin. */
   get skin(): Skin {
     return this.current;
@@ -162,7 +191,10 @@ export class Game {
 
   /** Pick the skin for the HUD progress pill (called when a run starts and whenever one is unlocked). */
   private refreshGoalTarget(): void {
-    this.goalTarget = nextSkin(this.save.data.unlocked, this.liveProgress());
+    const unlocked = this.save.data.unlocked;
+    // Where metres do not count, distance skins are not candidates for the pill.
+    const skip = this.profile.countsForSkins ? unlocked : unlocked.concat(SKINS.filter((s) => s.goal.type === 'distance').map((s) => s.id));
+    this.goalTarget = nextSkin(skip, this.liveProgress());
   }
 
   /** Live value of the HUD target's objective (this run included), without allocating. */
@@ -171,7 +203,7 @@ export class Game {
     if (!t) return 0;
     const d = this.save.data;
     switch (t.goal.type) {
-      case 'distance': return this.distance;
+      case 'distance': return this.profile.countsForSkins ? this.distance : 0;
       case 'coins': return d.coins + this.coins;
       case 'attempts': return d.attempts;
       case 'saws': return d.saws + this.saws;
@@ -183,7 +215,7 @@ export class Game {
   private liveProgress(): Progress {
     const d = this.save.data;
     return {
-      distance: this.distance,
+      distance: this.profile.countsForSkins ? this.distance : 0,
       coins: d.coins + this.coins,
       attempts: d.attempts,
       saws: d.saws + this.saws,
@@ -226,7 +258,12 @@ export class Game {
   }
 
   get best(): number {
-    return this.save.data.best;
+    return this.record.best;
+  }
+
+  /** Distance of the best run in the selected difficulty (for the in-world marker). */
+  get bestDist(): number {
+    return this.record.bestDist;
   }
 
   get attempts(): number {
@@ -244,11 +281,11 @@ export class Game {
 
   /** Build a fresh layout and put the player at the start, waiting for the first press. */
   private resetRun(): void {
-    this.generator.reset(this.seedCounter++, this.startAt);
+    this.generator.reset(this.seedCounter++, this.startAt, this.profile);
     this.generator.ensureAhead(this.startAt + GEN_AHEAD);
     this.player.reset(this.startAt);
-    this.player.speed = speedAt(0);
-    this.difficulty = 0;
+    this.difficulty = difficultyAt(this.startAt, this.profile);
+    this.player.speed = speedAt(this.difficulty);
     this.distance = this.coins = this.score = 0;
     this.saws = this.crushers = 0;
     this.moverIdx = 0;
@@ -266,7 +303,7 @@ export class Game {
   }
 
   private beginRun(): void {
-    this.bestAtStart = this.save.data.best;
+    this.bestAtStart = this.record.best;
     this.unlockedNow.length = 0;
     this.save.data.attempts++;
     this.setState('playing');
@@ -339,7 +376,7 @@ export class Game {
     }
 
     const p = this.player;
-    this.difficulty = difficultyAt(p.x);
+    this.difficulty = difficultyAt(p.x, this.profile);
     p.speed = speedAt(this.difficulty);
     this.audio.intensity = this.difficulty;
     p.step(dt, pressed, held, this.world);
@@ -348,7 +385,7 @@ export class Game {
     this.distance = Math.max(0, Math.floor(p.x));
     this.score = this.distance + this.coins * COIN_VALUE;
     this.checkRecord();
-    if (this.distance >= this.nextDistanceGoal || this.countDodged()) this.checkUnlocks();
+    if ((this.distance >= this.nextDistanceGoal && this.profile.countsForSkins) || this.countDodged()) this.checkUnlocks();
     this.generator.ensureAhead(p.x + GEN_AHEAD);
     this.world.prune(p.x - KEEP_BEHIND);
     if (p.dead) this.die();
@@ -423,10 +460,11 @@ export class Game {
     d.coins += this.coins;
     d.saws += this.saws;
     d.crushers += this.crushers;
-    d.maxDist = Math.max(d.maxDist, this.distance);
-    if (this.score > d.best) {
-      d.best = this.score;
-      d.bestDist = this.distance;
+    if (this.profile.countsForSkins) d.maxDist = Math.max(d.maxDist, this.distance);
+    const rec = this.record;
+    if (this.score > rec.best) {
+      rec.best = this.score;
+      rec.bestDist = this.distance;
     }
     this.save.flush();
   }

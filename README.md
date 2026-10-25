@@ -82,6 +82,26 @@ Océano sierras, Bosque plataformas y techos, Vacío prensas. Después de 2400 m
 métrica de justicia mide la ventana *decisiva* de salto (≥150 ms con la hitbox real, que es más chica que el
 dibujo), así que ya no exigen el píxel exacto.
 
+### Modos y dificultades
+
+El menú elige el **modo de juego** (hoy solo *Sin fin*; *Ritmo*, por niveles, aparece como "Próximamente" y será un modo
+aparte, sin reemplazar al runner) y la **dificultad** del modo sin fin, con récord propio en cada una
+(`src/core/modes.ts`, `DIFFICULTIES` en `src/world/Difficulty.ts`):
+
+| | Fácil | Normal | Difícil |
+|---|---|---|---|
+| Ritmo de la rampa (por metro) | ×0,55 | ×1 | ×1,5 |
+| Dificultad inicial / máxima | 0 / 0,7 (nunca llega a la velocidad tope) | 0 / 1 | 0,2 / 1 |
+| Aparición de obstáculos nuevos | ×1,6 más lejos | los de la tabla | ×0,6 (más cerca) |
+| Respiro entre obstáculos | +0,2 s | — | −0,08 s |
+| Presión de fin de juego | sin | ×1 | ×1,25 |
+| Metros cuentan para aspectos de distancia | no | sí | sí |
+
+Cada perfil solo mueve *en qué punto de la rampa ya verificada* está cada metro (velocidad y variantes salen de la
+misma relación dificultad↔velocidad que valida la tabla de variantes) y ajusta el respiro plano, así que los
+niveles siguen siendo resolubles en los tres; hay tests de solvencia por dificultad. Para sumar un modo nuevo,
+ver el comentario de `src/core/modes.ts`.
+
 ### Suelo y HUD
 
 El suelo (`src/render/Ground.ts`) tiene franja de profundidad, estratos y piedras con parallax, un borde superior
