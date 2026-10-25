@@ -91,7 +91,8 @@ dato principal de cada modo: récord, niveles y discos, o récord Ω. Abajo, al 
 de modo, un espacio de alto fijo (dificultad en *Sin fin*, descripción en los demás), **Jugar** y la tarjeta de
 **Aspectos** con el progreso hacia el próximo. Como ese espacio no cambia de alto, cambiar de modo nunca mueve
 Jugar. En horizontal se reparte en dos columnas, y en pantallas muy bajas se oculta primero la ayuda de controles.
-Mientras el menú está abierto, el mundo de fondo corre sin el personaje, para no duplicar el del menú.
+El menú tiene su propio fondo: solo cielo, montañas y ciudad, con el horizonte al pie de la pantalla, sin piso
+ni personaje corriendo, así ninguna línea del escenario atraviesa los botones.
 
 ### Modos y dificultades
 

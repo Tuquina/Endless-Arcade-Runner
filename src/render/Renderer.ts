@@ -85,6 +85,7 @@ export class Renderer {
   private fastFor = 0;
   private skyGrad: CanvasGradient | null = null;
   private skyVersion = -1;
+  private skyPx = -1;
   private readonly visible: Rect[] = [];
   private readonly roof: Rect[] = [];
   /** The first portal of each kind in the current level gets a hint above it. */
@@ -184,7 +185,10 @@ export class Renderer {
     const px = p.prevX + (p.x - p.prevX) * alpha;
     const py = p.prevY + (p.y - p.prevY) * alpha;
     this.camX = px - this.viewW * PLAYER_SCREEN_X;
-    this.groundPx = Math.round(this.h * GROUND_SCREEN_Y);
+    // The main menu gets its own scene: only sky, mountains and skyline, with the horizon at the bottom
+    // edge, so no ground line ever cuts through the menu controls.
+    const menu = game.state === 'menu';
+    this.groundPx = menu ? this.h : Math.round(this.h * GROUND_SCREEN_Y);
 
     // Rhythm levels keep one world's palette for the whole song.
     // (The secret run cycles through every world as it goes, like the endless runner.)
@@ -196,7 +200,8 @@ export class Renderer {
     } else {
       this.pulse = 0;
     }
-    if (this.skyVersion !== this.theme.version) {
+    if (this.skyVersion !== this.theme.version || this.skyPx !== this.groundPx) {
+      this.skyPx = this.groundPx;
       const g = ctx.createLinearGradient(0, 0, 0, this.groundPx);
       g.addColorStop(0, this.theme.c.skyTop);
       g.addColorStop(1, this.theme.c.skyBottom);
@@ -211,14 +216,13 @@ export class Renderer {
     this.mark('setup');
     this.drawBackground(game);
     this.mark('background');
-    this.drawWorld(game, px);
-    this.mark('world');
-    // In the main menu the world scrolls as a backdrop only: the menu has its own character, and a
-    // second one running behind the controls would compete with it.
-    const backdrop = game.state === 'menu';
-    if (!backdrop && !this.skip.has('fx')) game.fx.draw(ctx, this.camX, this.groundPx, scale);
-    this.mark('fx');
-    if (!backdrop) this.drawPlayer(game, px, py);
+    if (!menu) {
+      this.drawWorld(game, px);
+      this.mark('world');
+      if (!this.skip.has('fx')) game.fx.draw(ctx, this.camX, this.groundPx, scale);
+      this.mark('fx');
+      this.drawPlayer(game, px, py);
+    }
     this.mark('player');
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
